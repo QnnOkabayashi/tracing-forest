@@ -1,8 +1,8 @@
 [package]
 name = "tracing-forest"
 version = "0.1.0"
+authors = ["Quinn Okabayashi"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+repository = "https://github.com/QnnOkabayashi/tracing-forest"
 
 [dependencies]
