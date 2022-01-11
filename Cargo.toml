@@ -1,53 +1,5 @@
-[package]
-name = "tracing-forest"
-version = "0.1.0"
-edition = "2018"
-
-[features]
-full = ["uuid", "chrono", "smallvec", "sync", "json", "derive", "attributes"]
-sync = ["tokio", "tracing-forest-macros/sync"]
-derive = ["tracing-forest-macros/derive"]
-attributes = ["tracing-forest-macros/attributes"]
-json = ["serde", "serde_json"]
-
-[dependencies]
-tracing = "0.1"
-tracing-subscriber = "0.3"
-
-[dependencies.uuid]
-version = "0.8"
-features = ["v4", "serde", ]
-optional = true
-
-[dependencies.chrono]
-version = "0.4"
-optional = true
-
-[dependencies.smallvec]
-# Stores event field-value pairs on the stack if there are few enough
-version = "1.7"
-optional = true
-
-[dependencies.tokio]
-version = "1"
-features = ["sync", "rt", "macros", "time"]
-optional = true
-
-[dependencies.serde]
-version = "1.0"
-features = ["derive"]
-optional = true
-
-[dependencies.serde_json]
-version = "1.0"
-optional = true
-
-[dependencies.tracing-forest-macros]
-path = "tracing-forest-macros"
-optional = true
-
-[dev-dependencies]
-tracing-forest = { path = ".", features = ["full"] }
-
 [workspace]
-members = ["tracing-forest-macros"]
+members = [
+    "tracing-forest",
+    "tracing-forest-macros"
+]
