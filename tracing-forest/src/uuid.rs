@@ -96,16 +96,12 @@ where
 
         let id = current.id().unwrap_or_else(fail::no_current_span);
 
-        let span = subscriber
+        subscriber
             .span(id)
-            .unwrap_or_else(fail::span_not_in_context);
-
-        let uuid = span
+            .unwrap_or_else(fail::span_not_in_context)
             .extensions()
             .get::<TreeSpanOpened>()
             .unwrap_or_else(fail::no_tree_layer)
-            .uuid();
-
-        uuid
+            .uuid()
     })
 }

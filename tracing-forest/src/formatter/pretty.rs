@@ -4,16 +4,15 @@
 
 use crate::formatter::Formatter;
 use crate::layer::{KeyValue, Tree, TreeAttrs, TreeEvent, TreeKind, TreeSpan};
-use crate::private::{DEBUG_ICON, ERROR_ICON, INFO_ICON, TRACE_ICON, WARN_ICON};
 use crate::tag::TagData;
 use std::fmt;
 use std::io::{self, Write};
 use tracing::Level;
 
 /// Format logs for pretty printing.
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```log
 /// INFO     try_from_entry_ro [ 7.47ms | 6.523% / 100.000% ]
 /// INFO     ┝━ server::internal_search [ 6.98ms | 31.887% / 93.477% ]
@@ -35,7 +34,6 @@ use tracing::Level;
 /// TRACE    ┕━ 📍 [trace]: We finished!
 /// ```
 pub struct Pretty {
-    #[doc(hidden)]
     _priv: (),
 }
 
@@ -90,18 +88,9 @@ fn format_indent(indent: &mut Vec<Edge>, writer: &mut Vec<u8>) -> io::Result<()>
 }
 
 fn format_event(event: &TreeEvent, level: Level, writer: &mut Vec<u8>) -> io::Result<()> {
-    let (message, icon) = match event.tag {
-        Some(TagData { message, icon }) => (message, icon),
-        None => match level {
-            Level::TRACE => ("trace", TRACE_ICON),
-            Level::DEBUG => ("debug", DEBUG_ICON),
-            Level::INFO => ("info", INFO_ICON),
-            Level::WARN => ("warn", WARN_ICON),
-            Level::ERROR => ("error", ERROR_ICON),
-        },
-    };
+    let tag = event.tag.unwrap_or_else(|| TagData::from(level));
 
-    write!(writer, "{} [{}]: {}", icon, message, event.message)?;
+    write!(writer, "{} [{}]: {}", tag.icon, tag.message, event.message)?;
 
     for KeyValue { key, value } in event.fields.iter() {
         write!(writer, " | {}: {}", key, value)?;

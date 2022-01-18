@@ -11,7 +11,7 @@ use tracing_subscriber::fmt::MakeWriter;
 /// A [`Processor`] that blocks the current thread to format and write logs on
 /// arrival.
 ///
-/// To initialize a new [`BlockingProcessor`], see [`blocking`].
+/// To initialize a new [`BlockingProcessor`], see the [`blocking`] function.
 pub struct BlockingProcessor<F, W> {
     formatter: F,
     make_writer: W,
@@ -26,9 +26,15 @@ where
         let mut buf = Vec::with_capacity(0);
 
         #[allow(clippy::expect_used)]
-        self.formatter.fmt(tree, &mut buf).expect("formatting failed");
-        #[allow(clippy::unwrap_used)]
-        self.make_writer.make_writer().write_all(&buf[..]).unwrap();
+        {
+            self.formatter
+                .fmt(tree, &mut buf)
+                .expect("formatting failed");
+            self.make_writer
+                .make_writer()
+                .write_all(&buf[..])
+                .expect("writing failed");
+        }
     }
 }
 
@@ -43,13 +49,13 @@ where
 /// ## Examples
 ///
 /// ```
-/// # use tracing_forest::{blocking, formatter::pretty::Pretty, Processor};
+/// # use tracing_forest::{blocking, Pretty, Processor};
 /// fn main() {
-///     tracing::subscriber::set_global_default({
+///     let _guard = tracing::subscriber::set_default({
 ///         blocking(Pretty::new(), std::io::stdout)
 ///             .into_layer()
 ///             .into_subscriber()
-///     }).unwrap();
+///     });
 ///     
 ///     tracing::info!("blocking the thread to process this log >:)");
 /// }

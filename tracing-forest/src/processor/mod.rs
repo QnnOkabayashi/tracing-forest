@@ -24,10 +24,9 @@ pub trait Processor: 'static + Sized {
     ///
     /// This is the same as `TreeLayer::new(processor)`.
     ///
-    /// ## Examples
-    ///
+    /// # Example
     /// ```
-    /// # use tracing_forest::{blocking, formatter::pretty::Pretty, Processor};
+    /// # use tracing_forest::{blocking, Pretty, Processor};
     /// let _guard = tracing::subscriber::set_default({
     ///     blocking(Pretty::new(), std::io::stdout)
     ///         .into_layer()
@@ -44,5 +43,6 @@ pub trait Processor: 'static + Sized {
     /// * Sending over a network
     /// * Storing in memory for later access
     /// * Ignoring
+    /// * Or anything else!
     fn process(&self, tree: Tree);
 }

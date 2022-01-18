@@ -1,7 +1,7 @@
+use crate::AttributeArgs;
 use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use syn::parse::Parser;
-type AttributeArgs = syn::punctuated::Punctuated<syn::NestedMeta, syn::Token![,]>;
 
 fn token_stream_to_compile_err(mut tokens: TokenStream, err: syn::Error) -> TokenStream {
     tokens.extend(TokenStream::from(err.into_compile_error()));
@@ -71,7 +71,7 @@ fn impl_attribute(
         {
             let path = tokio_attribute_path(is_test);
 
-            if input.attrs.iter().find(|attr| attr.path == path).is_none() {
+            if !input.attrs.iter().any(|attr| attr.path == path) {
                 let msg = if is_test {
                     "Attribute must be succeeded by #[tokio::test] for async tests"
                 } else {
@@ -100,7 +100,7 @@ fn impl_async(config: Config, mut input: syn::ItemFn) -> syn::Result<TokenStream
         layer = quote! { #layer.tag::<#tag>() };
     }
 
-    let guard = quote! { ::tracing_forest::private::set_default(#layer.into_subscriber()) };
+    let get_guard = quote! { ::tracing_forest::private::set_default(#layer.into_subscriber()) };
 
     let brace_token = input.block.brace_token;
     let inner_ident = quote::format_ident!("{}_inner", input.sig.ident);
@@ -111,15 +111,15 @@ fn impl_async(config: Config, mut input: syn::ItemFn) -> syn::Result<TokenStream
         {
             let (__guard, __handle) = {
                 let (#processor, handle) = ::tracing_forest::async_spawn(#formatter, #make_writer);
-                (#guard, handle)
+                (#get_guard, handle)
             };
             let result = {
                 let __moved_guard = __guard;
                 #inner
                 #inner_ident().await
             };
-            #[allow(clippy::unwrap_used)]
-            __handle.await.unwrap();
+            #[allow(clippy::expect_used)]
+            __handle.await.expect("failed receiving logs");
             result
         }
     })
@@ -149,18 +149,21 @@ fn impl_sync(config: Config, mut input: syn::ItemFn) -> syn::Result<TokenStream>
         layer = quote! { #layer.tag::<#tag>() };
     }
 
-    let guard = quote! { ::tracing_forest::private::set_default(#layer.into_subscriber()) };
+    let get_guard = quote! { ::tracing_forest::private::set_default(#layer.into_subscriber()) };
 
     let brace_token = input.block.brace_token;
-    let block = &input.block;
-
+    let inner_ident = quote::format_ident!("{}_inner", input.sig.ident);
+    let mut inner = input.clone();
+    inner.attrs = vec![];
+    inner.sig.ident = inner_ident.clone();
     input.block = syn::parse2(quote! {
         {
-            let __guard = #guard;
-            #block
+            let __guard = #get_guard;
+            #inner
+            #inner_ident()
         }
-    })?;
-
+    })
+    .expect("Parsing failure");
     input.block.brace_token = brace_token;
 
     Ok(quote! {
@@ -184,7 +187,7 @@ enum MakeWriter {
 impl ToTokens for Formatter {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         tokens.extend(match self {
-            Formatter::Json => quote! { ::tracing_forest::formatter::json::Json::new(false) },
+            Formatter::Json => quote! { ::tracing_forest::formatter::json::Json::compact() },
             Formatter::Pretty => quote! { ::tracing_forest::formatter::pretty::Pretty::new() },
         })
     }

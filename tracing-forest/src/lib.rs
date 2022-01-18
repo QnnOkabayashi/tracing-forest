@@ -13,7 +13,7 @@
 //! tasks concurrently, like server backends. Unlike other [`Subscriber`]s which
 //! simply keep track of the context of an event, `tracing-forest` preserves
 //! the contextual coherence when writing logs, allowing readers to easily trace
-//! a sequence of events.
+//! a sequence of events from the same task.
 //!
 //! `tracing-forest` provides many tools for authoring applications, but can
 //! also be extended to author other libraries.
@@ -26,19 +26,20 @@
 //! # Getting started
 //!
 //! The easiest way to get started is to enable all features. Do this by
-//! enabling the `full` feature flag:
+//! adding the following to your `Cargo.toml` file:
 //! ```toml
 //! tracing-forest = { version = "1", features = ["full"] }
 //! ```
-//!
 //! Then, add the [`#[tracing_forest::main]`][attr_main] attribute to your main function:
 //! ```
+//! # #[allow(clippy::needless_doctest_main)]
 //! #[tracing_forest::main]
 //! fn main() {
 //!     // do stuff here...
 //!     tracing::trace!("Hello, world!");
 //! }
 //! ```
+//! This initializes a [`Subscriber`] which automatically collects logs.
 //!
 //! # Contextual Coherence in action
 //!
@@ -121,6 +122,8 @@
 //! INFO     ┕━ 💬 [info]: 3
 //! INFO     ┕━ 💬 [info]: 5
 //! ```
+//! Although though the numbers were logged chronologically, they appear grouped
+//! in the spans they originated from. This is contextual coherence.
 //!
 //! [join]: tokio::join
 //! [instrumenting]: tracing::instrument::Instrument::instrument
@@ -140,12 +143,12 @@
 //!
 //! But with custom tags, they can be!
 //! ```log
-//! INFO     💬 [admin.info]: some info for the admin
-//! ERROR    🚨 [request.error]: the request timed out
-//! ERROR    🔐 [security.critical]: the db has been breached
+//! INFO     💬 [admin_info]: some info for the admin
+//! ERROR    🚨 [request_error]: the request timed out
+//! ERROR    🔐 [security_critical]: the db has been breached
 //! ```
 //!
-//! See the [module level documentation][crate::tag] for details.
+//! See the [`tag` module documentation][crate::tag] for details.
 //!
 //! # Attaching [`Uuid`]s to spans
 //!
@@ -154,13 +157,19 @@
 //! ID is randomly generated, whereas child spans adopt the ID of their
 //! parent.
 //!
+//! ### Retreiving the current [`Uuid`]
+//!
 //! To retreive the [`Uuid`] of the current span, use the [`id`] function.
+//!
+//! ### Initializing a span with a specific [`Uuid`]
+//!
 //! To set the [`Uuid`] of a new span, use [`uuid_span!`], or the shorthand
 //! versions, [`uuid_trace_span!`], [`uuid_debug_span!`], [`uuid_info_span!`],
 //! [`uuid_warn_span!`], or [`uuid_error_span!`].
 //!
-//! ## Example
+//! ## Examples
 //!
+//! Passing in custom [`Uuid`]s to nested spans:
 //! ```
 //! # use tracing_forest::uuid_trace_span;
 //! # use ::uuid::Uuid;
@@ -169,25 +178,81 @@
 //! let first_id = Uuid::new_v4();
 //! let second_id = Uuid::new_v4();
 //!
+//! tracing::info!("first_id: {}", first_id);
+//! tracing::info!("second_id: {}", second_id);
+//!
 //! // Explicitly pass `first_id` into a new span
 //! uuid_trace_span!(first_id, "first").in_scope(|| {
-//!     
+//!
 //!     // Check that the ID we passed in is the current ID
 //!     assert_eq!(first_id, tracing_forest::id::<Registry>());
-//!     
+//!
 //!     // Open another span, explicitly passing in a new ID
 //!     uuid_trace_span!(second_id, "second").in_scope(|| {
-//!             
+//!
 //!         // Check that the second ID was set
 //!         assert_eq!(second_id, tracing_forest::id::<Registry>());
 //!     });
-//!         
-//!     // Now that `second` has closed, check that `first_id` is back
+//!
+//!     // `first_id` should still be the current ID
 //!     assert_eq!(first_id, tracing_forest::id::<Registry>());
 //! });
 //! # }
 //! ```
+//! ```log
+//! 00000000-0000-0000-0000-000000000000 INFO     💬 [info]: first_id: 9f197cc3-b340-4df6-be53-4ab742a3c586
+//! 00000000-0000-0000-0000-000000000000 INFO     💬 [info]: second_id: d552ecfa-a568-4b68-9e68-a4f1f7918579
+//! 9f197cc3-b340-4df6-be53-4ab742a3c586 TRACE    first [ 76.6µs | 80.206% / 100.000% ]
+//! d552ecfa-a568-4b68-9e68-a4f1f7918579 TRACE    ┕━ second [ 15.2µs | 19.794% ]
+//! ```
 //!
+//! Instrumenting a future with a span using a custom [`Uuid`]:
+//! ```
+//! # use tracing::{info, Instrument};
+//! # use ::uuid::Uuid;
+//! # #[tracing_forest::test]
+//! # #[tokio::test]
+//! # async fn test_instrument_with_uuid() {
+//! let id = Uuid::new_v4();
+//! info!("id: {}", id);
+//!
+//! async {
+//!     assert_eq!(id, tracing_forest::id::<Registry>());
+//! }.instrument(uuid_trace_span!(id, "in_async")).await;
+//! # }
+//! ```
+//! ```log
+//! 00000000-0000-0000-0000-000000000000 INFO     💬 [info]: id: 5aacc2d4-f625-401b-9bb8-dc5c355fd31b
+//! 5aacc2d4-f625-401b-9bb8-dc5c355fd31b TRACE    in_async [ 18.6µs | 100.000% ]
+//! ```
+//!
+//! # Immediate logs
+//!
+//! This crate also provides functionality to immediately format and print logs
+//! to stderr in the case of logs with high urgency. This can be done by setting
+//! the `immediate` field to `true` in the trace data.
+//!
+//! ## Example
+//!
+//! ```
+//! # use tracing::{info, trace_span};
+//! # #[tracing_forest::test]
+//! # fn test_immediate() {
+//! trace_span!("my_span").in_scope(|| {
+//!     info!("first");
+//!     info!("second");
+//!     info!(immediate = true, "third, but immediately");
+//! })
+//! # }
+//! ```
+//! ```log
+//! 💬 IMMEDIATE 💬 INFO     my_span > third, but immediately
+//! TRACE    my_span [ 163µs | 100.000% ]
+//! INFO     ┕━ 💬 [info]: first
+//! INFO     ┕━ 💬 [info]: second
+//! INFO     ┕━ 💬 [info]: third, but immediately
+//! ```
+//! 
 //! # Feature flags
 //!
 //! `tracing-forest` uses feature flags to reduce dependencies in your code.
@@ -222,12 +287,11 @@ mod ser;
 mod uuid;
 #[macro_use]
 mod macros;
-pub(crate) mod fail;
+mod fail;
 
 // Items that are required for macros but not intended for public API
 #[doc(hidden)]
 pub mod private {
-    pub use crate::tag::{unrecognized_tag_id, TagData};
     #[cfg(feature = "uuid")]
     pub use crate::uuid::into_u64_pair;
     pub use tracing::subscriber::set_default;
@@ -239,19 +303,10 @@ pub mod private {
     pub const ERROR_ICON: char = '🚨';
 }
 
-// TODO:
-// * [x] Organize processors
-//      - change `proc` back to `processor`
-//      - break into modules?
-// * [x] Remove P generic from TreeLayer, it's not needed
-// * [x] Rebrand to `tracing-forest`
-// * [x] Pretty formatter (basically refactor the original)
-// * [ ] Convert JSON formatting to generic serialization
-// * [x] Write proc macros for `tracing_forest::test` and `tracing_forest::main`
-// * [ ] Write docs
-// *   [ ] crate-wide docs
-// *   [ ] proc macros
-
+#[cfg(feature = "json")]
+#[cfg_attr(docsrs, doc(cfg(feature = "json")))]
+pub use crate::formatter::json::Json;
+pub use crate::formatter::pretty::Pretty;
 pub use crate::layer::TreeLayer;
 pub use crate::processor::blocking::blocking;
 #[cfg(feature = "sync")]
@@ -263,81 +318,10 @@ pub use crate::tag::Tag;
 #[cfg_attr(docsrs, doc(cfg(feature = "uuid")))]
 pub use crate::uuid::id;
 
-/// Derive macro generating an implementation of the [`Tag`] trait.
-///
-/// See [`tag` module][crate::tag] for details on how to use tags in logs.
-///
-/// # Note:
-///
-/// This is targetted towards application authors. Each application should
-/// derive on exactly one `enum` type with variants associated with any type of
-/// event that could occur. See below for examples.
-///
-/// # The `#[tag(..)]` Attribute
-///
-/// This macro uses the `#[tag(..)]` attribute to determine what the displayed
-/// tag should look like. `struct` types must use this attribute above their
-/// definition, and `enum` types must use this attribute on every variant.
-///
-/// There are two components that make up a tag: an icon character, and a
-/// message. The icon is typically used only for pretty printing, while the
-/// message provides a minimalist description of what kind of event happened.
-///
-/// Tag variants are often associated with log levels, which have predefined
-/// icons. You can opt into these defaults by using the shorthand syntax, which
-/// accepts `trace`, `debug`, `info`, `warn`, and `error`. The message follows
-/// in the string literal.
-/// ```
-/// # use tracing_forest::Tag;
-/// #[derive(Tag)]
-/// enum MyTag {
-///     // `trace` keyword defaults to 📍
-///     #[tag(trace: "request.trace")]
-///     RequestTrace,
-/// }
-/// ```
-/// To use a custom icon, use the `custom` keyword:
-/// ```
-/// # use tracing_forest::Tag;
-/// #[derive(Tag)]
-/// enum MyTag {
-///     #[tag(custom('🤯'): "security.breach")]
-///     SecurityBreach,
-/// }
-/// ```
-///
-/// # Examples
-///
-/// ```
-/// # use tracing_forest::Tag;
-/// #[derive(Tag)]
-/// pub enum KanidmTag {
-///     #[tag(debug: "admin.debug")]
-///     AdminDebug,
-///     #[tag(info: "admin.info")]
-///     AdminInfo,
-///     #[tag(warn: "admin.warn")]
-///     AdminWarn,
-///     #[tag(trace: "request.trace")]
-///     RequestTrace,
-///     #[tag(error: "request.error")]
-///     RequestError,
-///     #[tag(custom('🔓'): "security.access")]
-///     SecurityAccess,
-///     #[tag(custom('🔐'): "security.critical")]
-///     SecurityCritical,
-/// }
-/// ```
-///
-#[cfg(feature = "derive")]
-pub use tracing_forest_macros::Tag;
-
 /// Marks test to run in the context of a [`TreeLayer`] subscriber,
 /// suitable to test environment.
 ///
 /// # Examples
-///
-/// ### Default behavior
 ///
 /// By default, logs are pretty-printed to stdout.
 ///
@@ -359,30 +343,23 @@ pub use tracing_forest_macros::Tag;
 ///
 /// ```
 /// # use tracing_forest::Tag;
-/// # #[derive(Tag)]
-/// # enum MyTag {}
+/// #[derive(Tag)]
+/// enum MyTag {}
+///
 /// #[tracing_forest::test(tag = "MyTag", fmt = "json")]
 /// fn test_subscriber_config() {
 ///     tracing::info!("Hello in JSON");
 /// }
 /// ```
 /// ```json
-/// {
-///   "level": "INFO",
-///   "kind": {
-///     "Event": {
-///       "tag": null,
-///       "message": "Hello in JSON",
-///       "fields": {}
-///     }
-///   }
-/// }
+/// {"level":"INFO","kind":{"Event":{"tag":null,"message":"Hello in JSON","fields":{}}}}
 /// ```
 ///
 /// ### Using with Tokio runtime
 ///
-/// The attribute can also be proceeded by the [`#[tokio::test]`][tokio::test]
-/// attribute to run the test in the context of an async runtime.
+/// When the `sync` feature is enabled, this attribute can also be proceeded by
+/// the [`#[tokio::test]`][tokio::test] attribute to run the test in the context
+/// of an async runtime.
 /// ```
 /// #[tracing_forest::test]
 /// #[tokio::test]
@@ -400,11 +377,10 @@ pub use tracing_forest_macros::test;
 ///
 /// # Examples
 ///
-/// ### Default behavior
-///
 /// By default, logs are pretty-printed to stdout.
 ///
 /// ```
+/// # #[allow(clippy::needless_doctest_main)]
 /// #[tracing_forest::main]
 /// fn main() {
 ///     tracing::info!("Hello, world!");
@@ -422,30 +398,23 @@ pub use tracing_forest_macros::test;
 ///
 /// ```
 /// # use tracing_forest::Tag;
-/// # #[derive(Tag)]
-/// # enum MyTag {}
+/// #[derive(Tag)]
+/// enum MyTag {}
+///
 /// #[tracing_forest::main(tag = "MyTag", fmt = "json")]
 /// fn main() {
 ///     tracing::info!("Hello in JSON");
 /// }
 /// ```
 /// ```json
-/// {
-///   "level": "INFO",
-///   "kind": {
-///     "Event": {
-///       "tag": null,
-///       "message": "Hello in JSON",
-///       "fields": {}
-///     }
-///   }
-/// }
+/// {"level":"INFO","kind":{"Event":{"tag":null,"message":"Hello in JSON","fields":{}}}}
 /// ```
 ///
 /// ### Using with Tokio runtime
 ///
-/// The attribute can also be proceeded by the [`#[tokio::main]`][tokio::main]
-/// attribute to run the function in the context of an async runtime.
+/// When the `sync` feature is enabled, this attribute can also be proceeded by
+/// the [`#[tokio::main]`][tokio::main] attribute to run the function in the
+/// context of an async runtime.
 /// ```
 /// #[tracing_forest::main]
 /// #[tokio::main(flavor = "current_thread")]
@@ -458,3 +427,10 @@ pub use tracing_forest_macros::test;
 /// ```
 #[cfg(feature = "attributes")]
 pub use tracing_forest_macros::main;
+
+/// Derive macro generating an implementation of the [`Tag`] trait.
+///
+/// See [`tag` module documentation][crate::tag] for details on how to define 
+/// and use tags.
+#[cfg(feature = "derive")]
+pub use tracing_forest_macros::Tag;

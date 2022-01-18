@@ -2,28 +2,29 @@
 //!
 //! Implementation details in this module aren't important, unless you're
 //! implementing your own [`Processor`] or [`Formatter`].
-//! 
+//!
 //! # Quick reference
-//! 
-//! Trace data is stored in the layer as a tree, where spans represent internal 
+//!
+//! Trace data is stored in the layer as a tree, where spans represent internal
 //! nodes and events represent leafs.
-//! 
+//!
 //! * [`Tree`]: A node in the trace tree.
-//! * [`TreeAttrs`]: Common data used by spans and events, like a [`Uuid`] if 
-//! the `uuid` feature is enabled, a timestamp if the `timestamp` feature is 
+//! * [`TreeAttrs`]: Common data used by spans and events, like a [`Uuid`] if
+//! the `uuid` feature is enabled, a timestamp if the `timestamp` feature is
 //! enabled, and a [`Level`].
 //! * [`TreeKind`]: Contains either a [`TreeSpan`] or a [`TreeEvent`].
-//! * [`TreeSpan`]: Data unique to span traces, including durations and other 
+//! * [`TreeSpan`]: Data unique to span traces, including durations and other
 //! [`Tree`] nodes.
 //! * [`TreeEvent`]: Data unique to event traces, like tags.
 //!
 //! [`Formatter`]: crate::formatter::Formatter
 
 use crate::fail;
+use crate::formatter::format_immediate;
 use crate::processor::Processor;
 #[cfg(feature = "json")]
 use crate::ser;
-use crate::tag::{NoTag, Tag, TagData, TagParser};
+use crate::tag::{Tag, TagData, TagParser};
 #[cfg(feature = "chrono")]
 use chrono::{DateTime, Utc};
 #[cfg(feature = "json")]
@@ -56,13 +57,11 @@ pub struct KeyValue {
 #[cfg(feature = "uuid")]
 const DEFAULT_EVENT_UUID: Uuid = Uuid::nil();
 
-pub(crate) const TAG_KEY: &'static str = "__event_tag";
+pub(crate) const TAG_KEY: &str = "__event_tag";
 
-/// The main type provided by this crate.
-/// 
-/// See the [top-level documentation] for details on how to use.
-/// 
-/// [top-level documentation]: crate
+/// A [`Layer`] that tracks and maintains contextual coherence.
+///
+/// See the [top-level documentation][crate] for details on how to use.
 pub struct TreeLayer<P> {
     processor: P,
     tag_parser: TagParser,
@@ -73,7 +72,7 @@ impl<P: Processor> TreeLayer<P> {
     pub fn new(processor: P) -> Self {
         TreeLayer {
             processor,
-            tag_parser: NoTag::from_field,
+            tag_parser: fail::tag_unset,
         }
     }
 
@@ -224,9 +223,9 @@ impl TreeSpanOpened {
                     (Some(msb), Some(lsb)) => Some(crate::uuid::from_u64_pair(msb, lsb)),
                     (None, None) => None,
                     _ => {
-                        // ! This is the case where only half of a uuid
-                        // ! was passed in. Should we say anything?
-                        // ! For now, no.
+                        // This is the case where only half of a uuid
+                        // was passed in. Should we say anything?
+                        // For now, no.
                         None
                     }
                 }
@@ -425,16 +424,22 @@ where
         let (tree_attrs, tree_event, immediate) = self.parse_event(event);
 
         if immediate {
-            todo!("print to console as a blocking operation");
+            #[allow(clippy::expect_used)]
+            format_immediate(&tree_attrs, &tree_event, ctx.event_span(event))
+                .expect("formatting immediate event failed");
         }
 
         match ctx.event_span(event) {
-            Some(parent) => parent
-                .extensions_mut()
-                .get_mut::<TreeSpanOpened>()
-                .unwrap_or_else(fail::tree_span_opened_not_in_extensions)
-                .log_event(tree_attrs, tree_event),
-            None => self.processor.process(Tree::new(tree_attrs, tree_event)),
+            Some(parent) => {
+                parent
+                    .extensions_mut()
+                    .get_mut::<TreeSpanOpened>()
+                    .unwrap_or_else(fail::tree_span_opened_not_in_extensions)
+                    .log_event(tree_attrs, tree_event);
+            }
+            None => {
+                self.processor.process(Tree::new(tree_attrs, tree_event));
+            }
         }
     }
 

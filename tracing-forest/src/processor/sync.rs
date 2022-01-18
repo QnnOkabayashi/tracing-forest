@@ -19,7 +19,7 @@ use tracing_subscriber::fmt::MakeWriter;
 /// In the case where a processing task has already been initialized,
 /// an [`AsyncProcessor`] can also be constructed manually from a
 /// [`tokio::sync::mpsc::UnboundedSender`]:
-/// 
+///
 /// ```
 /// # use tokio::sync::mpsc;
 /// # use tracing_forest::layer::{Tree, TreeLayer};
@@ -66,7 +66,7 @@ impl Processor for AsyncProcessor {
 /// In a function that runs indefinitely
 ///
 /// ```
-/// # use tracing_forest::{async_spawn, formatter::pretty::Pretty, Processor};
+/// # use tracing_forest::{async_spawn, Pretty, Processor};
 /// # async fn start_server() {}
 /// #[tokio::main(flavor = "current_thread")]
 /// async fn main() {
@@ -84,7 +84,7 @@ impl Processor for AsyncProcessor {
 /// In a function that terminates
 ///
 /// ```
-/// # use tracing_forest::{async_spawn, formatter::pretty::Pretty, Processor};
+/// # use tracing_forest::{async_spawn, Pretty, Processor};
 /// #[tokio::test]
 /// async fn my_short_test() {
 ///     let (guard, handle) = {
@@ -123,9 +123,13 @@ where
             let mut buf = Vec::with_capacity(0);
 
             #[allow(clippy::expect_used)]
-            formatter.fmt(tree, &mut buf).expect("formatting failed");
-            #[allow(clippy::unwrap_used)]
-            make_writer.make_writer().write_all(&buf[..]).unwrap();
+            {
+                formatter.fmt(tree, &mut buf).expect("formatting failed");
+                make_writer
+                    .make_writer()
+                    .write_all(&buf[..])
+                    .expect("writing failed");
+            }
         }
     });
 
