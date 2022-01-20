@@ -39,7 +39,8 @@
 //!     tracing::trace!("Hello, world!");
 //! }
 //! ```
-//! This initializes a [`Subscriber`] which automatically collects logs.
+//! For more configuration options, see the 
+//! [`builder` module documentation][mod@crate::builder].
 //!
 //! # Contextual Coherence in action
 //!
@@ -185,17 +186,17 @@
 //! uuid_trace_span!(first_id, "first").in_scope(|| {
 //!
 //!     // Check that the ID we passed in is the current ID
-//!     assert_eq!(first_id, tracing_forest::id::<Registry>());
+//!     assert_eq!(first_id, tracing_forest::id());
 //!
 //!     // Open another span, explicitly passing in a new ID
 //!     uuid_trace_span!(second_id, "second").in_scope(|| {
 //!
 //!         // Check that the second ID was set
-//!         assert_eq!(second_id, tracing_forest::id::<Registry>());
+//!         assert_eq!(second_id, tracing_forest::id());
 //!     });
 //!
 //!     // `first_id` should still be the current ID
-//!     assert_eq!(first_id, tracing_forest::id::<Registry>());
+//!     assert_eq!(first_id, tracing_forest::id());
 //! });
 //! # }
 //! ```
@@ -217,7 +218,7 @@
 //! info!("id: {}", id);
 //!
 //! async {
-//!     assert_eq!(id, tracing_forest::id::<Registry>());
+//!     assert_eq!(id, tracing_forest::id());
 //! }.instrument(uuid_trace_span!(id, "in_async")).await;
 //! # }
 //! ```
@@ -252,7 +253,7 @@
 //! INFO     ┕━ 💬 [info]: second
 //! INFO     ┕━ 💬 [info]: third, but immediately
 //! ```
-//! 
+//!
 //! # Feature flags
 //!
 //! `tracing-forest` uses feature flags to reduce dependencies in your code.
@@ -273,6 +274,7 @@
 //! [attr_test]: tracing_forest_macros::test
 //! [attr_main]: tracing_forest_macros::main
 
+pub mod builder;
 pub mod formatter;
 pub mod layer;
 pub mod processor;
@@ -303,16 +305,8 @@ pub mod private {
     pub const ERROR_ICON: char = '🚨';
 }
 
-#[cfg(feature = "json")]
-#[cfg_attr(docsrs, doc(cfg(feature = "json")))]
-pub use crate::formatter::json::Json;
-pub use crate::formatter::pretty::Pretty;
+pub use crate::builder::builder;
 pub use crate::layer::TreeLayer;
-pub use crate::processor::blocking::blocking;
-#[cfg(feature = "sync")]
-#[cfg_attr(docsrs, doc(cfg(feature = "sync")))]
-pub use crate::processor::sync::async_spawn;
-pub use crate::processor::Processor;
 pub use crate::tag::Tag;
 #[cfg(feature = "uuid")]
 #[cfg_attr(docsrs, doc(cfg(feature = "uuid")))]
@@ -321,6 +315,9 @@ pub use crate::uuid::id;
 /// Marks test to run in the context of a [`TreeLayer`] subscriber,
 /// suitable to test environment.
 ///
+/// For more configuration options, see the 
+/// [`builder` module documentation][mod@crate::builder].
+/// 
 /// # Examples
 ///
 /// By default, logs are pretty-printed to stdout.
@@ -333,6 +330,18 @@ pub use crate::uuid::id;
 /// ```
 /// ```log
 /// INFO     💬 [info]: Hello, world!
+/// ```
+/// Equivalent code not using `#[tracing_forest::test]`
+/// ```
+/// #[test]
+/// fn test_subscriber() {
+///     tracing_forest::builder()
+///         .with_test_writer()
+///         .build_blocking()
+///         .in_closure(|| {
+///             tracing::info!("Hello, world!");
+///         })
+/// }
 /// ```
 ///
 /// ### Tags and formatting
@@ -354,6 +363,24 @@ pub use crate::uuid::id;
 /// ```json
 /// {"level":"INFO","kind":{"Event":{"tag":null,"message":"Hello in JSON","fields":{}}}}
 /// ```
+/// Equivalent code not using `#[tracing_forest::test]`
+/// ```
+/// # use tracing_forest::Tag;
+/// #[derive(Tag)]
+/// enum MyTag {}
+///
+/// #[test]
+/// fn test_subscriber_config() {
+///     tracing_forest::builder()
+///         .json()
+///         .with_test_writer()
+///         .with_tag::<MyTag>()
+///         .build_blocking()
+///         .in_closure(|| {
+///             tracing::info!("Hello, world!");
+///         })
+/// }
+/// ```
 ///
 /// ### Using with Tokio runtime
 ///
@@ -370,10 +397,26 @@ pub use crate::uuid::id;
 /// ```log
 /// INFO     💬 [info]: Hello from Tokio!
 /// ```
+/// Equivalent code not using `#[tracing_forest::test]`
+/// ```
+/// #[tokio::test]
+/// async fn test_tokio() {
+///     tracing_forest::builder()
+///         .with_test_writer()
+///         .build_async()
+///         .in_future(async {
+///             tracing::info!("Hello from Tokio!");
+///         })
+///         .await
+/// }
+/// ```
 #[cfg(feature = "attributes")]
 pub use tracing_forest_macros::test;
 
 /// Marks function to run in the context of a [`TreeLayer`] subscriber.
+/// 
+/// For more configuration options, see the 
+/// [`builder` module documentation][mod@crate::builder].
 ///
 /// # Examples
 ///
@@ -388,6 +431,17 @@ pub use tracing_forest_macros::test;
 /// ```
 /// ```log
 /// INFO     💬 [info]: Hello, world!
+/// ```
+/// Equivalent code not using `#[tracing_forest::main]`
+/// ```
+/// # #[allow(clippy::needless_doctest_main)]
+/// fn main() {
+///     tracing_forest::builder()
+///         .build_blocking()
+///         .in_closure(|| {
+///             tracing::info!("Hello, world!");
+///         })
+/// }
 /// ```
 ///
 /// ### Tags and formatting
@@ -409,6 +463,23 @@ pub use tracing_forest_macros::test;
 /// ```json
 /// {"level":"INFO","kind":{"Event":{"tag":null,"message":"Hello in JSON","fields":{}}}}
 /// ```
+/// Equivalent code not using `#[tracing_forest::main]`
+/// ```
+/// # use tracing_forest::Tag;
+/// #[derive(Tag)]
+/// enum MyTag {}
+///
+/// # #[allow(clippy::needless_doctest_main)]
+/// fn main() {
+///     tracing_forest::builder()
+///         .json()
+///         .with_tag::<MyTag>()
+///         .build_blocking()
+///         .in_closure(|| {
+///             tracing::info!("Hello, world!");
+///         })
+/// }
+/// ```
 ///
 /// ### Using with Tokio runtime
 ///
@@ -425,12 +496,25 @@ pub use tracing_forest_macros::test;
 /// ```log
 /// INFO     💬 [info]: Hello from Tokio!
 /// ```
+/// Equivalent code not using `#[tracing_forest::main]`
+/// ```
+/// # #[allow(clippy::needless_doctest_main)]
+/// #[tokio::main(flavor = "current_thread")]
+/// async fn main() {
+///     tracing_forest::builder()
+///         .build_async()
+///         .in_future(async {
+///             tracing::info!("Hello from Tokio!");
+///         })
+///         .await
+/// }
+/// ```
 #[cfg(feature = "attributes")]
 pub use tracing_forest_macros::main;
 
 /// Derive macro generating an implementation of the [`Tag`] trait.
 ///
-/// See [`tag` module documentation][crate::tag] for details on how to define 
+/// See [`tag` module documentation][crate::tag] for details on how to define
 /// and use tags.
 #[cfg(feature = "derive")]
 pub use tracing_forest_macros::Tag;

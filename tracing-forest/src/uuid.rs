@@ -6,6 +6,7 @@ use crate::fail;
 use crate::layer::TreeSpanOpened;
 use tracing::Subscriber;
 use tracing_subscriber::registry::LookupSpan;
+use tracing_subscriber::Registry;
 use uuid::Uuid;
 
 // For internal macro usage only
@@ -60,12 +61,11 @@ pub fn from_u64_pair(msb: u64, lsb: u64) -> Uuid {
 /// # Examples
 ///
 /// ```
-/// # use tracing_subscriber::Registry;
 /// # use tracing::trace_span;
 /// # #[tracing_forest::main]
 /// # fn main() {
 /// trace_span!("my_span").in_scope(|| {
-///     let id = tracing_forest::id::<Registry>();
+///     let id = tracing_forest::id();
 ///     tracing::info!("The current id is: {}", id);
 /// })
 /// # }
@@ -76,21 +76,17 @@ pub fn from_u64_pair(msb: u64, lsb: u64) -> Uuid {
 /// This function has many opportunities to panic, but each should be easily
 /// preventable by the caller at compile time. It will panic if:
 /// * There is no current subscriber.
-/// * The current subscriber cannot be downcasted to the specified subscriber.
 /// * The current subscriber isn't in a span.
 /// * The current span's ID isn't registered with the subscriber.
 /// * The current subscriber isn't composed with a [`TreeLayer`].
 ///
-/// [`TreeLayer`]: crate::TreeLayer
+/// [`TreeLayer`]: crate::layer::TreeLayer
 #[must_use]
-pub fn id<S>() -> Uuid
-where
-    S: Subscriber + for<'a> LookupSpan<'a>,
-{
+pub fn id() -> Uuid {
     tracing::dispatcher::get_default(|dispatch| {
         let subscriber = dispatch
-            .downcast_ref::<S>()
-            .unwrap_or_else(fail::subscriber_not_found::<S>);
+            .downcast_ref::<Registry>()
+            .unwrap_or_else(fail::subscriber_not_found::<Registry>);
 
         let current = subscriber.current_span();
 

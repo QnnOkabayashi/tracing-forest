@@ -11,9 +11,12 @@ use std::fmt::{self, Write};
 use std::io;
 
 pub mod pretty;
+pub use pretty::Pretty;
 
 #[cfg(feature = "json")]
 pub mod json;
+#[cfg(feature = "json")]
+pub use json::Json;
 
 /// A type that formats [`Tree`]s into a buffer.
 ///

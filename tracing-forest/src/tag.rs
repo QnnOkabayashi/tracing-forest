@@ -1,12 +1,12 @@
 //! Trait for tagging events with custom messages and levels.
-//! 
+//!
 //! # Why use tags
-//! 
-//! Using tags in your application can improve readability by distinguishing 
-//! between different kinds of trace data such as requests, internal state, 
-//! or special operations. An error during a network request could mean a 
-//! timeout occurred, while an error in the internal state could mean 
-//! corruption. Both are errors, but one should be treated more seriously than 
+//!
+//! Using tags in your application can improve readability by distinguishing
+//! between different kinds of trace data such as requests, internal state,
+//! or special operations. An error during a network request could mean a
+//! timeout occurred, while an error in the internal state could mean
+//! corruption. Both are errors, but one should be treated more seriously than
 //! the other, and therefore should be easily distinguishable.
 //!
 //! # Custom macros for applications
@@ -79,9 +79,9 @@
 //! `Tag::as_field` will retain the same name and input parameter `&self`.
 //!
 //! [deriving]: tracing_forest_macros::Tag
-//! 
+//!
 //! # Example
-//! 
+//!
 //! ```
 //! # use tracing_forest::Tag;
 //! #[derive(Tag)]
@@ -116,7 +116,7 @@
 //!     FilterError,
 //! }
 //! ```
-use crate::cfg_json;
+use crate::{cfg_json, fail};
 use tracing::Level;
 
 /// A type that can tag events with custom messages.
@@ -181,5 +181,17 @@ cfg_json! {
         fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
             serializer.serialize_str(self.message)
         }
+    }
+}
+
+pub enum NoTag {}
+
+unsafe impl Tag for NoTag {
+    fn as_field(&self) -> u64 {
+        match *self {}
+    }
+
+    fn from_field(value: u64) -> TagData {
+        fail::tag_unset(value)
     }
 }

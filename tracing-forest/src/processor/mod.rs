@@ -5,9 +5,12 @@
 use crate::layer::{Tree, TreeLayer};
 
 pub mod blocking;
+pub use blocking::BlockingProcessor;
 
 #[cfg(feature = "sync")]
 pub mod sync;
+#[cfg(feature = "sync")]
+pub use sync::AsyncProcessor;
 
 /// A type that can process [trace trees][crate::layer::Tree].
 ///
@@ -24,14 +27,12 @@ pub trait Processor: 'static + Sized {
     ///
     /// This is the same as `TreeLayer::new(processor)`.
     ///
-    /// # Example
+    /// # Examples
     /// ```
-    /// # use tracing_forest::{blocking, Pretty, Processor};
-    /// let _guard = tracing::subscriber::set_default({
-    ///     blocking(Pretty::new(), std::io::stdout)
-    ///         .into_layer()
-    ///         .into_subscriber()
-    /// });
+    /// # use tracing_forest::processor::Processor;
+    /// # use tracing_forest::processor::BlockingProcessor;
+    /// # use tracing_forest::formatter::Pretty;
+    /// let layer = BlockingProcessor::new(Pretty::new(), std::io::stdout).into_layer();
     /// ```
     fn into_layer(self) -> TreeLayer<Self> {
         TreeLayer::new(self)

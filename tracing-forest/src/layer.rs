@@ -24,7 +24,7 @@ use crate::formatter::format_immediate;
 use crate::processor::Processor;
 #[cfg(feature = "json")]
 use crate::ser;
-use crate::tag::{Tag, TagData, TagParser};
+use crate::tag::{NoTag, Tag, TagData, TagParser};
 #[cfg(feature = "chrono")]
 use chrono::{DateTime, Utc};
 #[cfg(feature = "json")]
@@ -72,7 +72,7 @@ impl<P: Processor> TreeLayer<P> {
     pub fn new(processor: P) -> Self {
         TreeLayer {
             processor,
-            tag_parser: fail::tag_unset,
+            tag_parser: NoTag::from_field,
         }
     }
 
@@ -85,12 +85,6 @@ impl<P: Processor> TreeLayer<P> {
     pub fn tag<T: Tag>(mut self) -> Self {
         self.tag_parser = T::from_field;
         self
-    }
-}
-
-impl<P: Processor> From<P> for TreeLayer<P> {
-    fn from(processor: P) -> Self {
-        TreeLayer::new(processor)
     }
 }
 

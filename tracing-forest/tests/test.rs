@@ -1,6 +1,5 @@
 use tracing::{info, trace_span};
 use tracing_forest::uuid_trace_span;
-use tracing_subscriber::Registry;
 
 mod uuid_tests {
     use super::*;
@@ -9,7 +8,7 @@ mod uuid_tests {
     #[tracing_forest::test]
     fn test_get_uuid() {
         trace_span!("first").in_scope(|| {
-            let _ = tracing_forest::id::<Registry>();
+            let _ = tracing_forest::id();
         });
     }
 
@@ -18,7 +17,7 @@ mod uuid_tests {
         let id = Uuid::new_v4();
         info!("Using id: {}", id);
         uuid_trace_span!(id, "my_span").in_scope(|| {
-            let span_id = tracing_forest::id::<Registry>();
+            let span_id = tracing_forest::id();
             assert_eq!(id, span_id);
         });
     }
@@ -26,16 +25,16 @@ mod uuid_tests {
     #[tracing_forest::test]
     #[should_panic]
     fn test_get_uuid_not_in_span_panic() {
-        let _ = tracing_forest::id::<Registry>();
+        let _ = tracing_forest::id();
     }
 
     #[tracing_forest::test]
     #[should_panic]
     fn test_get_uuid_not_in_span_after_span_panic() {
         trace_span!("in a span").in_scope(|| {
-            let _ = tracing_forest::id::<Registry>();
+            let _ = tracing_forest::id();
         });
-        let _ = tracing_forest::id::<Registry>();
+        let _ = tracing_forest::id();
     }
 
     #[tracing_forest::test]
@@ -49,16 +48,16 @@ mod uuid_tests {
         // Explicitly pass `first_id` into a new span
         uuid_trace_span!(first_id, "first").in_scope(|| {
             // Check that the ID we passed in is the current ID
-            assert_eq!(first_id, tracing_forest::id::<Registry>());
+            assert_eq!(first_id, tracing_forest::id());
 
             // Open another span, explicitly passing in a new ID
             uuid_trace_span!(second_id, "second").in_scope(|| {
                 // Check that the second ID was set
-                assert_eq!(second_id, tracing_forest::id::<Registry>());
+                assert_eq!(second_id, tracing_forest::id());
             });
 
             // `first_id` should still be the current ID
-            assert_eq!(first_id, tracing_forest::id::<Registry>());
+            assert_eq!(first_id, tracing_forest::id());
         });
     }
 
@@ -69,7 +68,7 @@ mod uuid_tests {
         let id = Uuid::new_v4();
         info!("id: {}", id);
         async {
-            assert_eq!(id, tracing_forest::id::<Registry>());
+            assert_eq!(id, tracing_forest::id());
         }
         .instrument(uuid_trace_span!(id, "in_async"))
         .await;
@@ -83,25 +82,25 @@ mod uuid_tests {
         // Explicitly pass `first_id` into a new span
         uuid_trace_span!(first_id, "first").in_scope(|| {
             // Check that the ID we passed in is the current ID
-            assert_eq!(first_id, tracing_forest::id::<Registry>());
+            assert_eq!(first_id, tracing_forest::id());
 
             // Open another span, explicitly passing in a new ID
             uuid_trace_span!(second_id, "second").in_scope(|| {
                 // Check that the second ID was set
-                assert_eq!(second_id, tracing_forest::id::<Registry>());
+                assert_eq!(second_id, tracing_forest::id());
             });
 
             // Now that `second` has closed, check that `first_id` is back
-            assert_eq!(first_id, tracing_forest::id::<Registry>());
+            assert_eq!(first_id, tracing_forest::id());
         });
     }
 
     #[tracing_forest::test]
     fn test_get_many_times() {
         trace_span!("first").in_scope(|| {
-            let _ = tracing_forest::id::<Registry>();
-            let _ = tracing_forest::id::<Registry>();
-            let _ = tracing_forest::id::<Registry>();
+            let _ = tracing_forest::id();
+            let _ = tracing_forest::id();
+            let _ = tracing_forest::id();
         })
     }
 
@@ -225,37 +224,43 @@ mod attribute_tests {
         async {
             for i in 0..3 {
                 info!("iter: {}", i);
-                sleep(Duration::from_millis(200)).await;
+                sleep(Duration::from_millis(50)).await;
             }
         }
         .instrument(trace_span!("takes awhile"))
         .await;
     }
 
-    #[tracing_forest::test]
     #[tokio::test]
     async fn test_counting() {
-        let pause = Duration::from_millis(100);
-        let evens = async {
-            let mut interval = interval(pause);
-            for i in 0..3 {
-                interval.tick().await;
-                info!("{}", i * 2);
-            }
-        }
-        .instrument(trace_span!("count evens"));
+        tracing_forest::builder()
+            .with_test_writer()
+            .build_async()
+            .with(tracing_subscriber::filter::LevelFilter::WARN)
+            .in_future(async {
+                let pause = Duration::from_millis(50);
+                let evens = async {
+                    let mut interval = interval(pause);
+                    for i in 0..3 {
+                        interval.tick().await;
+                        info!("{}", i * 2);
+                    }
+                }
+                .instrument(trace_span!("count evens"));
 
-        let odds = async {
-            sleep(pause / 2).await;
-            let mut interval = interval(pause);
-            for i in 0..3 {
-                interval.tick().await;
-                info!("{}", i * 2 + 1);
-            }
-        }
-        .instrument(trace_span!("count odds"));
+                let odds = async {
+                    sleep(pause / 2).await;
+                    let mut interval = interval(pause);
+                    for i in 0..3 {
+                        interval.tick().await;
+                        info!("{}", i * 2 + 1);
+                    }
+                }
+                .instrument(trace_span!("count odds"));
 
-        let _ = tokio::join!(evens, odds);
+                let _ = tokio::join!(evens, odds);
+            })
+            .await
     }
 
     #[tracing_forest::main]
@@ -289,8 +294,8 @@ mod attribute_tests {
     #[tokio::test]
     async fn test_immediate_async() {
         async {
-            info!(immediate = true, "gotta print this asap");
-            sleep(Duration::from_secs(2)).await;
+            info!("logged first chronologically");
+            info!(immediate = true, "logged second, but printed immediately");
         }
         .instrument(trace_span!("my_span"))
         .await
@@ -318,4 +323,58 @@ mod attribute_tests {
     //         info!("epoch: {}", iter);
     //     }
     // }
+}
+
+mod builder_tests {
+    #[test]
+    fn test_json() {
+        tracing_forest::builder()
+            .pretty()
+            .build_blocking()
+            .in_closure(|| {
+                tracing::info!("Hello, world!");
+            })
+    }
+
+    use tracing_forest::Tag;
+    #[derive(Tag)]
+    enum MyTag {
+        #[tag(lvl = "info", msg = "greeting", macro = "greeting")]
+        Greeting,
+    }
+
+    #[test]
+    fn test_with_tag() {
+        tracing_forest::builder()
+            .with_tag::<MyTag>()
+            .build_blocking()
+            .in_closure(|| {
+                greeting!("Hello, world!");
+            })
+    }
+
+    #[derive(Tag)]
+    enum BearTag {
+        #[tag(lvl = "info", msg = "brown.bear", macro = "brown_bear")]
+        BrownBear,
+        #[tag(lvl = "warn", msg = "black.bear", macro = "black_bear")]
+        BlackBear,
+        #[tag(lvl = "error", msg = "polar.bear", macro = "polar_bear")]
+        PolarBear,
+    }
+
+    #[test]
+    fn main() {
+        tracing_forest::builder()
+            .pretty()
+            .with_writer(std::io::stderr)
+            .with_tag::<BearTag>()
+            .build_blocking()
+            .with(tracing_subscriber::filter::LevelFilter::WARN)
+            .in_closure(|| {
+                brown_bear!("if it's brown get down");
+                black_bear!("if it's black fight back");
+                polar_bear!("if it's white good night");
+            })
+    }
 }

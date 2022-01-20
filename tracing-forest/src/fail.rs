@@ -34,7 +34,8 @@ pub fn no_tree_layer<T>() -> T {
 }
 
 /* tag */
+use crate::tag::TagData;
 #[cold]
-pub fn tag_unset(id: u64) -> crate::tag::TagData {
+pub fn tag_unset(id: u64) -> TagData {
     panic!("No tag type set, but a tag was received: {}. If this is intentional, ensure that none of your field names are `{}` to avoid this.", id, crate::layer::TAG_KEY);
 }

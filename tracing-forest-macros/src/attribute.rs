@@ -80,47 +80,22 @@ fn impl_attribute(
                 return Err(syn::Error::new_spanned(args, msg));
             }
 
-            impl_async(build_config(args, is_test)?, input)
+            impl_async(Config::parse(args, is_test)?, input)
         }
     } else {
-        impl_sync(build_config(args, is_test)?, input)
+        impl_sync(Config::parse(args, is_test)?, input)
     }
 }
 
 #[cfg(feature = "sync")]
 fn impl_async(config: Config, mut input: syn::ItemFn) -> syn::Result<TokenStream> {
-    let formatter = config.formatter;
-    let make_writer = config.make_writer;
-
-    let processor = ident("processor");
-
-    let mut layer = quote! { ::tracing_forest::TreeLayer::new(#processor) };
-
-    if let Some(tag) = config.tag {
-        layer = quote! { #layer.tag::<#tag>() };
-    }
-
-    let get_guard = quote! { ::tracing_forest::private::set_default(#layer.into_subscriber()) };
+    let builder = config.builder();
 
     let brace_token = input.block.brace_token;
-    let inner_ident = quote::format_ident!("{}_inner", input.sig.ident);
-    let mut inner = input.clone();
-    inner.attrs = vec![];
-    inner.sig.ident = inner_ident.clone();
+    let block = input.block;
     input.block = syn::parse2(quote! {
         {
-            let (__guard, __handle) = {
-                let (#processor, handle) = ::tracing_forest::async_spawn(#formatter, #make_writer);
-                (#get_guard, handle)
-            };
-            let result = {
-                let __moved_guard = __guard;
-                #inner
-                #inner_ident().await
-            };
-            #[allow(clippy::expect_used)]
-            __handle.await.expect("failed receiving logs");
-            result
+            #builder.build_async().in_future(async #block).await
         }
     })
     .expect("Parsing failure");
@@ -130,37 +105,19 @@ fn impl_async(config: Config, mut input: syn::ItemFn) -> syn::Result<TokenStream
 }
 
 fn impl_sync(config: Config, mut input: syn::ItemFn) -> syn::Result<TokenStream> {
-    let formatter = config.formatter;
-    let make_writer = config.make_writer;
-
     let header = if config.is_test {
         quote! { #[::core::prelude::v1::test] }
     } else {
         quote! {}
     };
 
-    let mut layer = quote! {
-        ::tracing_forest::TreeLayer::new(
-            ::tracing_forest::blocking(#formatter, #make_writer)
-        )
-    };
-
-    if let Some(tag) = config.tag {
-        layer = quote! { #layer.tag::<#tag>() };
-    }
-
-    let get_guard = quote! { ::tracing_forest::private::set_default(#layer.into_subscriber()) };
+    let builder = config.builder();
 
     let brace_token = input.block.brace_token;
-    let inner_ident = quote::format_ident!("{}_inner", input.sig.ident);
-    let mut inner = input.clone();
-    inner.attrs = vec![];
-    inner.sig.ident = inner_ident.clone();
+    let block = input.block;
     input.block = syn::parse2(quote! {
         {
-            let __guard = #get_guard;
-            #inner
-            #inner_ident()
+            #builder.build_blocking().in_closure(|| #block)
         }
     })
     .expect("Parsing failure");
@@ -178,43 +135,66 @@ enum Formatter {
     Pretty,
 }
 
-enum MakeWriter {
-    TestWriter,
-    Stdout,
-    // add more variants later...
-}
-
 impl ToTokens for Formatter {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         tokens.extend(match self {
-            Formatter::Json => quote! { ::tracing_forest::formatter::json::Json::compact() },
-            Formatter::Pretty => quote! { ::tracing_forest::formatter::pretty::Pretty::new() },
+            Formatter::Json => quote! { .json() },
+            Formatter::Pretty => quote! { .pretty() },
         })
     }
 }
 
-impl ToTokens for MakeWriter {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        tokens.extend(match self {
-            MakeWriter::TestWriter => quote! { ::tracing_forest::private::TestWriter::new() },
-            MakeWriter::Stdout => quote! { ::std::io::stdout },
-        })
-    }
-}
-
-struct ConfigBuilder {
+struct Config {
     formatter: Option<Formatter>,
     tag: Option<proc_macro2::Ident>,
     is_test: bool,
 }
 
-impl ConfigBuilder {
+impl Config {
     fn new(is_test: bool) -> Self {
-        ConfigBuilder {
+        Config {
             formatter: None,
             tag: None,
             is_test,
         }
+    }
+
+    fn parse(args: AttributeArgs, is_test: bool) -> syn::Result<Self> {
+        let mut config = Config::new(is_test);
+
+        for arg in args {
+            match arg {
+                syn::NestedMeta::Meta(syn::Meta::NameValue(namevalue)) => {
+                    let ident = namevalue
+                        .path
+                        .get_ident()
+                        .ok_or_else(|| {
+                            syn::Error::new_spanned(&namevalue, "Must have a specified ident")
+                        })?
+                        .to_string()
+                        .to_lowercase();
+                    match ident.as_str() {
+                        "tag" => config.set_tag(&namevalue)?,
+                        "fmt" => config.set_formatter(&namevalue)?,
+                        name => {
+                            let message = format!(
+                                "Unknown argument `{}` is specified; expected one of: `tag`, `fmt`",
+                                name,
+                            );
+                            return Err(syn::Error::new_spanned(namevalue, message));
+                        }
+                    }
+                }
+                other => {
+                    return Err(syn::Error::new_spanned(
+                        other,
+                        "Unknown argument inside the macro",
+                    ));
+                }
+            }
+        }
+
+        Ok(config)
     }
 
     fn set_formatter(&mut self, namevalue: &syn::MetaNameValue) -> syn::Result<()> {
@@ -262,63 +242,21 @@ impl ConfigBuilder {
         }
     }
 
-    fn finish(self) -> Config {
-        let make_writer = if self.is_test {
-            MakeWriter::TestWriter
-        } else {
-            MakeWriter::Stdout
-        };
+    fn builder(self) -> proc_macro2::TokenStream {
+        let mut builder = quote! { ::tracing_forest::builder() };
 
-        Config {
-            formatter: self.formatter.unwrap_or(Formatter::Pretty),
-            make_writer,
-            tag: self.tag,
-            is_test: self.is_test,
+        if let Some(formatter) = self.formatter {
+            builder = quote! { #builder #formatter }
         }
-    }
-}
 
-struct Config {
-    formatter: Formatter,
-    make_writer: MakeWriter,
-    tag: Option<proc_macro2::Ident>,
-    is_test: bool,
-}
-
-fn build_config(args: AttributeArgs, is_test: bool) -> syn::Result<Config> {
-    let mut builder = ConfigBuilder::new(is_test);
-
-    for arg in args {
-        match arg {
-            syn::NestedMeta::Meta(syn::Meta::NameValue(namevalue)) => {
-                let ident = namevalue
-                    .path
-                    .get_ident()
-                    .ok_or_else(|| {
-                        syn::Error::new_spanned(&namevalue, "Must have a specified ident")
-                    })?
-                    .to_string()
-                    .to_lowercase();
-                match ident.as_str() {
-                    "tag" => builder.set_tag(&namevalue)?,
-                    "fmt" => builder.set_formatter(&namevalue)?,
-                    name => {
-                        let message = format!(
-                            "Unknown argument `{}` is specified; expected one of: `tag`, `fmt`",
-                            name,
-                        );
-                        return Err(syn::Error::new_spanned(namevalue, message));
-                    }
-                }
-            }
-            other => {
-                return Err(syn::Error::new_spanned(
-                    other,
-                    "Unknown argument inside the macro",
-                ));
-            }
+        if self.is_test {
+            builder = quote! { #builder.with_test_writer() };
         }
-    }
 
-    Ok(builder.finish())
+        if let Some(tag) = self.tag {
+            builder = quote! { #builder.with_tag::<#tag>() };
+        }
+
+        builder
+    }
 }

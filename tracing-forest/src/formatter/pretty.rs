@@ -33,12 +33,22 @@ use tracing::Level;
 /// WARN     │     ┕━ 🚧 [filter.warn]: Some filter warning lol
 /// TRACE    ┕━ 📍 [trace]: We finished!
 /// ```
+#[derive(Clone, Copy)]
 pub struct Pretty {
     _priv: (),
 }
 
 impl Pretty {
-    /// Constructs a new [`Pretty`] formatter.
+    /// Create a new [`Pretty`] formatter.
+    ///
+    /// # Examples
+    /// ```
+    /// # use tracing_forest::formatter::Pretty;
+    /// # use tracing_forest::processor::{BlockingProcessor, Processor};
+    /// let pretty_subscriber = BlockingProcessor::new(Pretty::new(), std::io::stdout)
+    ///     .into_layer()
+    ///     .into_subscriber();
+    /// ```
     pub const fn new() -> Self {
         Pretty { _priv: () }
     }
