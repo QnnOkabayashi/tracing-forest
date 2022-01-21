@@ -39,7 +39,7 @@
 //!     tracing::trace!("Hello, world!");
 //! }
 //! ```
-//! For more configuration options, see the 
+//! For more configuration options, see the
 //! [`builder` module documentation][mod@crate::builder].
 //!
 //! # Contextual Coherence in action
@@ -315,9 +315,9 @@ pub use crate::uuid::id;
 /// Marks test to run in the context of a [`TreeLayer`] subscriber,
 /// suitable to test environment.
 ///
-/// For more configuration options, see the 
+/// For more configuration options, see the
 /// [`builder` module documentation][mod@crate::builder].
-/// 
+///
 /// # Examples
 ///
 /// By default, logs are pretty-printed to stdout.
@@ -414,8 +414,8 @@ pub use crate::uuid::id;
 pub use tracing_forest_macros::test;
 
 /// Marks function to run in the context of a [`TreeLayer`] subscriber.
-/// 
-/// For more configuration options, see the 
+///
+/// For more configuration options, see the
 /// [`builder` module documentation][mod@crate::builder].
 ///
 /// # Examples

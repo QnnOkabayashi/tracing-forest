@@ -1,16 +1,22 @@
 //! Build the [`TreeLayer`] and [`Subscriber`] with custom configuration values.
 //!
-//! To start, call [`builder`] to create a [`LayerBuilder`], which configures 
+//! To start, call [`builder`] to create a [`LayerBuilder`], which configures
 //! the [`TreeLayer`] by chaining methods.
 //!
-//! After the the layer is configured, call [`build_async`] or 
+//! After the the layer is configured, call [`build_async`] or
 //! [`build_blocking`] on the [`LayerBuilder`] to get a [`SubscriberBuilder`].
 //! At this point, other [`Layer`]s can be composed onto it by chaining calls to
 //! the [`with`] method.
-//! 
-//! Finally, code can be run in the context of the [`Subscriber`] by calling 
-//! either [`in_future`] or [`in_closure`], depending on the type of 
+//!
+//! Finally, code can be run in the context of the [`Subscriber`] by calling
+//! either [`in_future`] or [`in_closure`], depending on the type of
 //! [`TreeLayer`] that was created.
+//!
+//! # Note
+//!
+//! If you don't need advanced configuration options, see
+//! [`#[tracing_forest::test]`][crate::test] and
+//! [`#[tracing_forest::main]`][crate::main].
 //!
 //! # Examples
 //! Running asynchronously with a custom tag, writing to stderr, formatting with
@@ -27,7 +33,8 @@
 //!     PolarBear
 //! }
 //!
-//! # fn main() {
+//! # #[test]
+//! # fn test_builder() {
 //! tracing_forest::builder()
 //!     .pretty()
 //!     .with_writer(std::io::stderr)
@@ -254,7 +261,8 @@ where
     ///     Greeting,
     /// }
     ///
-    /// # fn main() {
+    /// # #[test]
+    /// # fn test_with_tag() {
     /// tracing_forest::builder()
     ///     .with_tag::<MyTag>()
     ///     .build_blocking()

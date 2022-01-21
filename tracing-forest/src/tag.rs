@@ -184,6 +184,7 @@ cfg_json! {
     }
 }
 
+/// The absense of a [`Tag`].
 pub enum NoTag {}
 
 unsafe impl Tag for NoTag {
