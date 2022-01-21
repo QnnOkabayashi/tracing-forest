@@ -1,7 +1,12 @@
 [package]
 name = "tracing-forest"
 version = "0.1.0"
+authors = ["Quinn Okabayashi"]
 edition = "2018"
+description = "Preserving contextual coherence among trace data from concurrent tasks"
+keywords = ["tracing", "proc-macro", "async", "tokio"]
+license = "MIT"
+repository = "https://github.com/QnnOkabayashi/tracing-forest"
 
 [features]
 default = []
