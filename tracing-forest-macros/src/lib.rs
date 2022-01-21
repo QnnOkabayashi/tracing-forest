@@ -1,6 +1,8 @@
 //! `tracing-forest` macros.
 
+#[cfg(any(feature = "attributes", feature = "derive"))]
 use proc_macro::TokenStream;
+#[cfg(any(feature = "attributes", feature = "derive"))]
 pub(crate) type AttributeArgs = syn::punctuated::Punctuated<syn::NestedMeta, syn::Token![,]>;
 
 #[cfg(feature = "attributes")]
@@ -11,7 +13,6 @@ mod derive;
 #[cfg(feature = "derive")]
 #[proc_macro_derive(Tag, attributes(tag))]
 pub fn tag(input: TokenStream) -> TokenStream {
-    // quote::quote!{}.into()
     derive::tag(input)
 }
 

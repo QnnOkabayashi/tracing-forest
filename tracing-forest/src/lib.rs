@@ -1,4 +1,4 @@
-//! Preserve contextual coherence between trace data from concurrent tasks.
+//! Preserve contextual coherence among trace data from concurrent tasks.
 //!
 //! # Overview
 //!
@@ -123,8 +123,8 @@
 //! INFO     ┕━ 💬 [info]: 3
 //! INFO     ┕━ 💬 [info]: 5
 //! ```
-//! Although though the numbers were logged chronologically, they appear grouped
-//! in the spans they originated from. This is contextual coherence.
+//! Although the numbers were logged chronologically, they appear grouped in the
+//! spans they originated from.
 //!
 //! [join]: tokio::join
 //! [instrumenting]: tracing::instrument::Instrument::instrument
