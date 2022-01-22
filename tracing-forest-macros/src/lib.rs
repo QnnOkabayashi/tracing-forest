@@ -75,7 +75,6 @@ pub fn tag(input: TokenStream) -> TokenStream {
 /// fn test_tag_and_formatted() {
 ///     greeting!("Hello in JSON");
 /// }
-/// # fn main() {}
 /// ```
 /// ```json
 /// {"level":"INFO","kind":{"Event":{"tag":,"message":"Hello in JSON","fields":{}}}}
@@ -93,7 +92,7 @@ pub fn tag(input: TokenStream) -> TokenStream {
 /// }
 ///
 /// #[test]
-/// fn test_tagsand_formatted() {
+/// fn test_tags_and_formatted() {
 ///     tracing_forest::builder()
 ///         .json()
 ///         .with_test_writer()
@@ -103,7 +102,6 @@ pub fn tag(input: TokenStream) -> TokenStream {
 ///             tracing::info!("Hello, world!");
 ///         })
 /// }
-/// # fn main() {}
 /// ```
 ///
 /// ### Using with Tokio runtime
@@ -139,8 +137,6 @@ pub fn tag(input: TokenStream) -> TokenStream {
 pub fn test(args: TokenStream, item: TokenStream) -> TokenStream {
     attribute::test(args, item)
 }
-
-
 
 /// Marks function to run in the context of a 
 /// [`TreeLayer`](../tracing_forest/layer/struct.TreeLayer.html) subscriber.

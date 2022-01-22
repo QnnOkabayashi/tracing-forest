@@ -1,6 +1,6 @@
 [package]
 name = "tracing-forest-macros"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["Quinn Okabayashi"]
 edition = "2018"
 description = "Macros for tracing-forest"
@@ -25,3 +25,8 @@ features = ["parsing"]
 
 [package.metadata.docs.rs]
 all-features = true
+
+[dev-dependencies]
+tracing-forest = { path = "../tracing-forest", features = ["full"] }
+tokio = { version = "1", features = ["sync", "rt", "macros"] }
+tracing = "0.1"
