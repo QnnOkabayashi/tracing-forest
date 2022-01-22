@@ -8,11 +8,10 @@ mod attribute;
 #[cfg(feature = "derive")]
 mod derive;
 
-
-/// Derive macro generating an implementation of the 
-/// [`Tag`](../tracing-forest/tag/trait.Tag.html) trait.
+/// Derive macro generating an implementation of the
+/// [`Tag`](../tracing_forest/tag/trait.Tag.html) trait.
 ///
-/// See [`tag` module documentation](../tracing-forest/tag/index.html) 
+/// See [`tag` module documentation](../tracing_forest/tag/index.html)
 /// for details on how to define and use tags.
 #[cfg(feature = "derive")]
 #[proc_macro_derive(Tag, attributes(tag))]
@@ -20,7 +19,7 @@ pub fn tag(input: TokenStream) -> TokenStream {
     derive::tag(input)
 }
 
-/// Marks test to run in the context of a 
+/// Marks test to run in the context of a
 /// [`TreeLayer`](../tracing_forest/layer/struct.TreeLayer.html)
 /// subscriber, suitable to test environment.
 ///
@@ -57,7 +56,7 @@ pub fn tag(input: TokenStream) -> TokenStream {
 ///
 /// Custom tags and formatting can be configured with the `tag` and `fmt`
 /// arguments respectively. Currently, only `"pretty"` and `"json"` are
-/// supported formats, and tag types must implement the 
+/// supported formats, and tag types must implement the
 /// [`Tag`](../tracing_forest/tag/trait.Tag.html) trait.
 ///
 /// ```
@@ -107,7 +106,7 @@ pub fn tag(input: TokenStream) -> TokenStream {
 /// ### Using with Tokio runtime
 ///
 /// When the `sync` feature is enabled, this attribute can also be proceeded by
-/// the [`#[tokio::test]`] attribute to run the test in the context of an async 
+/// the [`#[tokio::test]`] attribute to run the test in the context of an async
 /// runtime.
 /// ```
 /// #[tracing_forest::test]
@@ -138,7 +137,7 @@ pub fn test(args: TokenStream, item: TokenStream) -> TokenStream {
     attribute::test(args, item)
 }
 
-/// Marks function to run in the context of a 
+/// Marks function to run in the context of a
 /// [`TreeLayer`](../tracing_forest/layer/struct.TreeLayer.html) subscriber.
 ///
 /// For more configuration options, see the
@@ -174,7 +173,7 @@ pub fn test(args: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// Custom tags and formatting can be configured with the `tag` and `fmt`
 /// arguments respectively. Currently, only `"pretty"` and `"json"` are
-/// supported formats, and tag types must implement the 
+/// supported formats, and tag types must implement the
 /// [`Tag`](../tracing_forest/tag/trait.Tag.html) trait.
 ///
 /// ```
@@ -188,6 +187,7 @@ pub fn test(args: TokenStream, item: TokenStream) -> TokenStream {
 ///     }
 /// }
 ///
+/// # #[allow(clippy::needless_doctest_main)]
 /// #[tracing_forest::main(tag = "GreetingTag", fmt = "json")]
 /// fn main() {
 ///     greeting!("Hello in JSON");
