@@ -19,28 +19,31 @@
 //!
 //! [`Formatter`]: crate::formatter::Formatter
 
-use crate::fail;
 use crate::formatter::format_immediate;
 use crate::processor::Processor;
-#[cfg(feature = "json")]
-use crate::ser;
 use crate::tag::{NoTag, Tag, TagData, TagParser};
-#[cfg(feature = "chrono")]
-use chrono::{DateTime, Utc};
-#[cfg(feature = "json")]
-use serde::Serialize;
+use crate::{cfg_chrono, cfg_json, cfg_uuid, fail};
 #[cfg(feature = "smallvec")]
 use smallvec::SmallVec;
 use std::time::{Duration, Instant};
 use std::{borrow::Cow, fmt};
 use tracing::field::{Field, Visit};
-use tracing::span::{Attributes, Record};
-use tracing::{Event, Id, Level, Metadata, Subscriber};
+use tracing::span::Attributes;
+use tracing::{Event, Id, Level, Subscriber};
 use tracing_subscriber::layer::Layered;
 use tracing_subscriber::Registry;
 use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
-#[cfg(feature = "uuid")]
-use uuid::Uuid;
+cfg_json! {
+    use crate::ser;
+    use serde::Serialize;
+}
+cfg_chrono! {
+    use chrono::{DateTime, Utc};
+}
+cfg_uuid! {
+    use uuid::Uuid;
+    const DEFAULT_EVENT_UUID: Uuid = Uuid::nil();
+}
 
 #[cfg(feature = "smallvec")]
 pub(crate) type Fields = SmallVec<[KeyValue; 3]>;
@@ -53,9 +56,6 @@ pub struct KeyValue {
     pub key: &'static str,
     pub value: String,
 }
-
-#[cfg(feature = "uuid")]
-const DEFAULT_EVENT_UUID: Uuid = Uuid::nil();
 
 pub(crate) const TAG_KEY: &str = "__event_tag";
 
@@ -158,6 +158,24 @@ impl From<TreeSpan> for TreeKind {
     }
 }
 
+impl TreeKind {
+    /// Converts into a [`TreeEvent`], if the kind is `Event`.
+    pub fn into_event(self) -> Option<TreeEvent> {
+        match self {
+            TreeKind::Event(event) => Some(event),
+            TreeKind::Span(_) => None,
+        }
+    }
+
+    /// Converts into a [`TreeSpan`], if the kind is `Span`.
+    pub fn into_span(self) -> Option<TreeSpan> {
+        match self {
+            TreeKind::Event(_) => None,
+            TreeKind::Span(span) => Some(span),
+        }
+    }
+}
+
 /// Information unique to logged spans.
 #[derive(Debug)]
 #[cfg_attr(feature = "json", derive(Serialize))]
@@ -211,16 +229,17 @@ impl TreeSpanOpened {
                 }
             }
 
-            #[cfg(feature = "uuid")]
-            fn get_uuid(&self) -> Option<Uuid> {
-                match (self.uuid_msb, self.uuid_lsb) {
-                    (Some(msb), Some(lsb)) => Some(crate::uuid::from_u64_pair(msb, lsb)),
-                    (None, None) => None,
-                    _ => {
-                        // This is the case where only half of a uuid
-                        // was passed in. Should we say anything?
-                        // For now, no.
-                        None
+            cfg_uuid! {
+                fn get_uuid(&self) -> Option<Uuid> {
+                    match (self.uuid_msb, self.uuid_lsb) {
+                        (Some(msb), Some(lsb)) => Some(crate::uuid::from_u64_pair(msb, lsb)),
+                        (None, None) => None,
+                        _ => {
+                            // This is the case where only half of a uuid
+                            // was passed in. Should we say anything?
+                            // For now, no.
+                            None
+                        }
                     }
                 }
             }
@@ -304,9 +323,10 @@ impl TreeSpanOpened {
         self.span.children.push(Tree::new(attrs, span));
     }
 
-    #[cfg(feature = "uuid")]
-    pub fn uuid(&self) -> Uuid {
-        self.attrs.uuid
+    cfg_uuid! {
+        pub fn uuid(&self) -> Uuid {
+            self.attrs.uuid
+        }
     }
 }
 
@@ -391,15 +411,6 @@ where
     P: Processor,
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
-    fn on_layer(&mut self, subscriber: &mut S) {
-        let _ = subscriber;
-    }
-
-    fn enabled(&self, metadata: &Metadata, ctx: Context<S>) -> bool {
-        let _ = (metadata, ctx);
-        true
-    }
-
     fn on_new_span(&self, attrs: &Attributes, id: &Id, ctx: Context<S>) {
         let span = ctx.span(id).unwrap_or_else(fail::span_not_in_context);
 
@@ -409,10 +420,6 @@ where
 
         extensions.insert(opened);
     }
-
-    fn on_record(&self, _span: &Id, _values: &Record, _ctx: Context<S>) {}
-
-    fn on_follows_from(&self, _span: &Id, _follows: &Id, _ctx: Context<S>) {}
 
     fn on_event(&self, event: &Event, ctx: Context<S>) {
         let (tree_attrs, tree_event, immediate) = self.parse_event(event);
@@ -473,6 +480,4 @@ where
             None => self.processor.process(Tree::new(tree_attrs, tree_span)),
         }
     }
-
-    fn on_id_change(&self, _old: &Id, _new: &Id, _ctx: Context<S>) {}
 }

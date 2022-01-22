@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Quinn Okabayashi"]
 edition = "2018"
 description = "Preserving contextual coherence among trace data from concurrent tasks"
-keywords = ["tracing", "async", "tokio", "tracing-subscriber"]
+keywords = ["tracing", "async", "tokio", "tracing-subscriber", "tree"]
 categories = [
 	"asynchronous",
 	"development-tools::debugging",
@@ -59,4 +59,4 @@ optional = true
 
 [dev-dependencies]
 tracing-forest = { path = ".", features = ["full"] }
-
+rand = "0.8.4"

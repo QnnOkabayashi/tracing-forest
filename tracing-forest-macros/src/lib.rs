@@ -2,8 +2,6 @@
 
 #[cfg(any(feature = "attributes", feature = "derive"))]
 use proc_macro::TokenStream;
-#[cfg(any(feature = "attributes", feature = "derive"))]
-pub(crate) type AttributeArgs = syn::punctuated::Punctuated<syn::NestedMeta, syn::Token![,]>;
 
 #[cfg(feature = "attributes")]
 mod attribute;

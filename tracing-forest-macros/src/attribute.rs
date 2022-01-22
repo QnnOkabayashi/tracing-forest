@@ -1,7 +1,7 @@
-use crate::AttributeArgs;
 use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use syn::parse::Parser;
+type AttributeArgs = syn::punctuated::Punctuated<syn::NestedMeta, syn::Token![,]>;
 
 fn token_stream_to_compile_err(mut tokens: TokenStream, err: syn::Error) -> TokenStream {
     tokens.extend(TokenStream::from(err.into_compile_error()));
@@ -95,7 +95,7 @@ fn impl_async(config: Config, mut input: syn::ItemFn) -> syn::Result<TokenStream
     let block = input.block;
     input.block = syn::parse2(quote! {
         {
-            #builder.build_async().in_future(async #block).await
+            #builder.async_layer().on_future(async #block).await
         }
     })
     .expect("Parsing failure");
@@ -117,7 +117,7 @@ fn impl_sync(config: Config, mut input: syn::ItemFn) -> syn::Result<TokenStream>
     let block = input.block;
     input.block = syn::parse2(quote! {
         {
-            #builder.build_blocking().in_closure(|| #block)
+            #builder.blocking_layer().on_closure(|| #block)
         }
     })
     .expect("Parsing failure");
@@ -254,7 +254,7 @@ impl Config {
         }
 
         if let Some(tag) = self.tag {
-            builder = quote! { #builder.with_tag::<#tag>() };
+            builder = quote! { #builder.with_tag::<crate::tracing_forest_tag::#tag>() };
         }
 
         builder

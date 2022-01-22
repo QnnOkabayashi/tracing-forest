@@ -3,13 +3,13 @@
 //! To start, call [`builder`] to create a [`LayerBuilder`], which configures
 //! the [`TreeLayer`] by chaining methods.
 //!
-//! After the the layer is configured, call [`build_async`] or
-//! [`build_blocking`] on the [`LayerBuilder`] to get a [`SubscriberBuilder`].
+//! After the the layer is configured, call [`async_layer`] or
+//! [`blocking_layer`] on the [`LayerBuilder`] to get a [`SubscriberBuilder`].
 //! At this point, other [`Layer`]s can be composed onto it by chaining calls to
 //! the [`with`] method.
 //!
 //! Finally, code can be run in the context of the [`Subscriber`] by calling
-//! either [`in_future`] or [`in_closure`], depending on the type of
+//! either [`on_future`] or [`on_closure`], depending on the type of
 //! [`TreeLayer`] that was created.
 //!
 //! # Note
@@ -22,15 +22,18 @@
 //! Running asynchronously with a custom tag, writing to stderr, formatting with
 //! pretty, and filtering out some logs.
 //! ```
-//! # use tracing_forest::Tag;
-//! #[derive(Tag)]
-//! enum BearTag {
-//!     #[tag(lvl = "info", msg = "brown.bear", macro = "brown_bear")]
-//!     BrownBear,
-//!     #[tag(lvl = "warn", msg = "black.bear", macro = "black_bear")]
-//!     BlackBear,
-//!     #[tag(lvl = "error", msg = "polar.bear", macro = "polar_bear")]
-//!     PolarBear
+//! tracing_forest::declare_tags! {
+//!     use tracing_forest::Tag;
+//!
+//!     #[derive(Tag)]
+//!     pub(crate) enum BearTag {
+//!         #[tag(lvl = "info", msg = "brown.bear", macro = "brown_bear")]
+//!         BrownBear,
+//!         #[tag(lvl = "warn", msg = "black.bear", macro = "black_bear")]
+//!         BlackBear,
+//!         #[tag(lvl = "error", msg = "polar.bear", macro = "polar_bear")]
+//!         PolarBear
+//!     }
 //! }
 //!
 //! # #[test]
@@ -39,9 +42,9 @@
 //!     .pretty()
 //!     .with_writer(std::io::stderr)
 //!     .with_tag::<BearTag>()
-//!     .build_blocking()
+//!     .blocking_layer()
 //!     .with(tracing_subscriber::filter::LevelFilter::WARN)
-//!     .in_closure(|| {
+//!     .on_closure(|| {
 //!         brown_bear!("if it's brown get down");
 //!         black_bear!("if it's black fight back");
 //!         polar_bear!("if it's white good night");
@@ -56,16 +59,23 @@
 //! See function level documentation of [`LayerBuilder`] and
 //! [`SubscriberBuilder`] for details on the various configuration settings.
 //!
-//! [`build_async`]: LayerBuilder::build_async
-//! [`build_blocking`]: LayerBuilder::build_blocking
+//! [`async_layer`]: LayerBuilder::async_layer
+//! [`blocking_layer`]: LayerBuilder::blocking_layer
 //! [`with`]: SubscriberBuilder::with
-//! [`in_future`]: SubscriberBuilder::in_future
-//! [`in_closure`]: SubscriberBuilder::in_closure
-use crate::formatter::{Formatter, Json, Pretty};
-use crate::processor::{AsyncProcessor, BlockingProcessor, Processor};
+//! [`on_future`]: SubscriberBuilder::on_future
+//! [`on_closure`]: SubscriberBuilder::on_closure
+use crate::formatter::{Formatter, Pretty};
+use crate::processor::{BlockingProcessor, Processor};
 use crate::tag::{NoTag, Tag};
-use crate::TreeLayer;
-use std::future::Future;
+use crate::{cfg_json, cfg_sync, TreeLayer};
+cfg_json! {
+    use crate::formatter::Json;
+}
+cfg_sync! {
+    use crate::processor::AsyncProcessor;
+    use std::future::Future;
+    use std::io::Write;
+}
 use std::marker::PhantomData;
 use tracing::Subscriber;
 use tracing_subscriber::fmt::{MakeWriter, TestWriter};
@@ -111,8 +121,8 @@ where
     /// ```
     /// tracing_forest::builder()
     ///     .with_test_writer()
-    ///     .build_blocking()
-    ///     .in_closure(|| {
+    ///     .blocking_layer()
+    ///     .on_closure(|| {
     ///         tracing::info!("Hello, world!");
     ///     })
     /// ```
@@ -128,8 +138,8 @@ where
     /// ```
     /// tracing_forest::builder()
     ///     .with_writer(std::io::stderr)
-    ///     .build_blocking()
-    ///     .in_closure(|| {
+    ///     .blocking_layer()
+    ///     .on_closure(|| {
     ///         tracing::info!("Hello, world!");
     ///     })
     /// ```
@@ -144,53 +154,55 @@ where
         }
     }
 
-    /// Applies compact JSON formatting.
-    ///
-    /// Configuration methods can be chained on the return value.
-    ///
-    /// # Examples
-    /// ```
-    /// tracing_forest::builder()
-    ///     .json()
-    ///     .build_blocking()
-    ///     .in_closure(|| {
-    ///         tracing::info!("Hello, world!");
-    ///     })
-    /// ```
-    /// ```log
-    /// {"level":"INFO","kind":{"Event":{"tag":null,"message":"Hello, world!","fields":{}}}}
-    /// ```
-    pub fn json(self) -> LayerBuilder<Json<true>, W, T> {
-        self.with_formatter(Json::compact())
-    }
+    cfg_json! {
+        /// Applies compact JSON formatting.
+        ///
+        /// Configuration methods can be chained on the return value.
+        ///
+        /// # Examples
+        /// ```
+        /// tracing_forest::builder()
+        ///     .json()
+        ///     .blocking_layer()
+        ///     .on_closure(|| {
+        ///         tracing::info!("Hello, world!");
+        ///     })
+        /// ```
+        /// ```log
+        /// {"level":"INFO","kind":{"Event":{"tag":null,"message":"Hello, world!","fields":{}}}}
+        /// ```
+        pub fn json(self) -> LayerBuilder<Json<true>, W, T> {
+            self.with_formatter(Json::compact())
+        }
 
-    /// Applies pretty JSON formatting.
-    ///
-    /// Configuration methods can be chained on the return value.
-    ///
-    /// # Examples
-    /// ```
-    /// tracing_forest::builder()
-    ///     .json_pretty()
-    ///     .build_blocking()
-    ///     .in_closure(|| {
-    ///         tracing::info!("Hello, world!");
-    ///     })
-    /// ```
-    /// ```log
-    /// {
-    ///   "level": "INFO",
-    ///   "kind": {
-    ///     "Event": {
-    ///       "tag": null,
-    ///       "message": "Hello, world!",
-    ///       "fields": {}
-    ///     }
-    ///   }
-    /// }
-    /// ```
-    pub fn json_pretty(self) -> LayerBuilder<Json<false>, W, T> {
-        self.with_formatter(Json::pretty())
+        /// Applies pretty JSON formatting.
+        ///
+        /// Configuration methods can be chained on the return value.
+        ///
+        /// # Examples
+        /// ```
+        /// tracing_forest::builder()
+        ///     .json_pretty()
+        ///     .blocking_layer()
+        ///     .on_closure(|| {
+        ///         tracing::info!("Hello, world!");
+        ///     })
+        /// ```
+        /// ```log
+        /// {
+        ///   "level": "INFO",
+        ///   "kind": {
+        ///     "Event": {
+        ///       "tag": null,
+        ///       "message": "Hello, world!",
+        ///       "fields": {}
+        ///     }
+        ///   }
+        /// }
+        /// ```
+        pub fn json_pretty(self) -> LayerBuilder<Json<false>, W, T> {
+            self.with_formatter(Json::pretty())
+        }
     }
 
     /// Applies pretty formatting.
@@ -201,8 +213,8 @@ where
     /// ```
     /// tracing_forest::builder()
     ///     .json_pretty()
-    ///     .build_blocking()
-    ///     .in_closure(|| {
+    ///     .blocking_layer()
+    ///     .on_closure(|| {
     ///         tracing::info!("Hello, world!");
     ///     })
     /// ```
@@ -232,8 +244,8 @@ where
     ///
     /// tracing_forest::builder()
     ///     .with_formatter(UselessFormatter)
-    ///     .build_blocking()
-    ///     .in_closure(|| {
+    ///     .blocking_layer()
+    ///     .on_closure(|| {
     ///         tracing::info!("Hello, world!");
     ///     })
     /// ```
@@ -254,19 +266,22 @@ where
     ///
     /// # Examples
     /// ```
-    /// # use tracing_forest::Tag;
-    /// #[derive(Tag)]
-    /// enum MyTag {
-    ///     #[tag(lvl = "info", msg = "greeting", macro = "greeting")]
-    ///     Greeting,
+    /// tracing_forest::declare_tags! {
+    ///     use tracing_forest::Tag;
+    ///
+    ///     #[derive(Tag)]
+    ///     pub(crate) enum MyTag {
+    ///         #[tag(lvl = "info", msg = "greeting", macro = "greeting")]
+    ///         Greeting,
+    ///     }
     /// }
     ///
-    /// # #[test]
+    /// #[test]
     /// # fn test_with_tag() {
     /// tracing_forest::builder()
     ///     .with_tag::<MyTag>()
-    ///     .build_blocking()
-    ///     .in_closure(|| {
+    ///     .blocking_layer()
+    ///     .on_closure(|| {
     ///         greeting!("Hello, world!");
     ///     })
     /// # }
@@ -290,10 +305,10 @@ where
     /// # Examples
     /// ```
     /// # #[tokio::test]
-    /// # async fn test_doc_build_async() {
+    /// # async fn test_doc_write_async() {
     /// tracing_forest::builder()
-    ///     .build_async()
-    ///     .in_future(async {
+    ///     .async_layer()
+    ///     .on_future(async {
     ///         tracing::info!("Hello from Tokio");
     ///     })
     ///     .await
@@ -301,13 +316,32 @@ where
     /// ```
     #[cfg(feature = "sync")]
     #[cfg_attr(docsrs, doc(cfg(feature = "sync")))]
-    pub fn build_async(
+    pub fn async_layer(
         self,
     ) -> SubscriberBuilder<
         Layered<TreeLayer<AsyncProcessor>, Registry>,
         AsyncExtensions<impl Future<Output = ()>>,
     > {
-        let (processor, handle) = AsyncProcessor::spawn(self.formatter, self.make_writer);
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let processor = AsyncProcessor::from(tx);
+
+        let handle = async move {
+            while let Some(tree) = rx.recv().await {
+                let mut buf = Vec::with_capacity(0);
+
+                #[allow(clippy::expect_used)]
+                {
+                    self.formatter
+                        .fmt(tree, &mut buf)
+                        .expect("formatting failed");
+                    self.make_writer
+                        .make_writer()
+                        .write_all(&buf[..])
+                        .expect("writing failed");
+                }
+            }
+        };
+
         let subscriber = processor.into_layer().tag::<T>().into_subscriber();
 
         SubscriberBuilder {
@@ -322,13 +356,13 @@ where
     /// ```
     /// # fn main() {
     /// tracing_forest::builder()
-    ///     .build_blocking()
-    ///     .in_closure(|| {
+    ///     .blocking_layer()
+    ///     .on_closure(|| {
     ///         tracing::info!("Hello from the current thread");
     ///     })
     /// # }
     /// ```
-    pub fn build_blocking(
+    pub fn blocking_layer(
         self,
     ) -> SubscriberBuilder<Layered<TreeLayer<BlockingProcessor<F, W>>, Registry>, BlockingExtensions>
     {
@@ -343,7 +377,7 @@ where
 }
 
 /// Extensions for [`AsyncProcessor`].
-pub struct AsyncExtensions<F>(F);
+pub struct AsyncExtensions<E>(E);
 
 /// Extensions for [`BlockingProcessor`].
 pub struct BlockingExtensions;
@@ -364,9 +398,9 @@ where
     /// # Examples
     /// ```
     /// tracing_forest::builder()
-    ///     .build_blocking()
+    ///     .blocking_layer()
     ///     .with(tracing_subscriber::filter::LevelFilter::INFO)
-    ///     .in_closure(|| {
+    ///     .on_closure(|| {
     ///         // do stuff here...
     ///     })
     /// ```
@@ -383,22 +417,21 @@ where
 
 #[cfg(feature = "sync")]
 #[cfg_attr(docsrs, doc(cfg(feature = "sync")))]
-impl<S, F> SubscriberBuilder<S, AsyncExtensions<F>>
+impl<S, E> SubscriberBuilder<S, AsyncExtensions<E>>
 where
     S: Subscriber + Send + Sync,
-    F: 'static + Future<Output = ()> + Send,
+    E: 'static + Future<Output = ()> + Send,
 {
     /// Runs the provided future in the context of a subscriber layered with a
     /// [`TreeLayer`] and a [`tokio`] runtime.
     ///
     /// [`TreeLayer`]: crate::layer::TreeLayer
-    pub async fn in_future<R>(self, fut: impl Future<Output = R>) -> R {
+    pub async fn on_future(self, future: impl Future<Output = ()>) {
         let handle = tokio::spawn(self.extensions.0);
         let guard = tracing::subscriber::set_default(self.subscriber);
-        let result = fut.await;
+        future.await;
         drop(guard);
-        handle.await.expect("failed closing the writing thread");
-        result
+        handle.await.expect("failed closing the writing task");
     }
 }
 
@@ -410,7 +443,7 @@ where
     /// [`TreeLayer`].
     ///
     /// [`TreeLayer`]: crate::layer::TreeLayer
-    pub fn in_closure<R>(self, closure: impl FnOnce() -> R) -> R {
+    pub fn on_closure<R>(self, closure: impl FnOnce() -> R) -> R {
         let _guard = tracing::subscriber::set_default(self.subscriber);
         closure()
     }

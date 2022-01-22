@@ -11,27 +11,36 @@
 //!
 //! # Custom macros for applications
 //!
-//! The first step to using custom tags is to define an `enum` type with
-//! variants for each possible log, and then [deriving] the [`Tag`] trait.
-//! ```
-//! use tracing_forest::Tag;
+//! The first step to using custom tags is to call [`tracing_forest::declare_tags!`]
+//! at the root level of your crate for macro hygiene purposes. Then define an
+//! `enum` type with variants for each possible log, and finally [deriving] the
+//! [`Tag`] trait. Ensure that the visibility is `pub(crate)` so any generated
+//! macros have access to it.
 //!
-//! #[derive(Tag)]
-//! pub enum MyTag {
-//!     #[tag(lvl = "trace", msg = "simple")]
-//!     Simple,
-//!     #[tag(
-//!         lvl = "info",
-//!         msg = "all.features",
-//!         icon = '🔐',
-//!         macro = "all_features"
-//!     )]
-//!     AllFeatures,
+//! [`tracing_forest::declare_tags!`]: crate::declare_tags!
+//! ```
+//! // lib.rs
+//! tracing_forest::declare_tags! {
+//!     use tracing_forest::Tag;
+//!    
+//!     #[derive(Tag)]
+//!     pub(crate) enum MyTag {
+//!         #[tag(lvl = "trace", msg = "simple")]
+//!         Simple,
+//!         #[tag(
+//!             lvl = "info",
+//!             msg = "all.features",
+//!             icon = '🔐',
+//!             macro = "all_features"
+//!         )]
+//!         AllFeatures,
+//!     }
 //! }
 //! ```
 //! In `enum` types, each variant must be a unit type, and have the `#[tag(..)]`
-//! attribute. `struct` types must have the `#[tag(..)]` attribute above their
-//! declaration. The attribute has four arguments that it takes:
+//! attribute. Similarly, `struct` types must be unit types and have the
+//! `#[tag(..)]` attribute above their declaration.
+//! The attribute has four arguments that it takes:
 //! * `lvl`: The log level at which the log occurs at, like `"trace"` or
 //! `"warn"`. This is used to determine the default icon and the log level if
 //! a macro is derived.
@@ -44,23 +53,26 @@
 //!
 //! If you generate macros, then they can be used throughout your application
 //! ```
-//! # use tracing_forest::Tag;
-//! # #[derive(Tag)]
-//! # pub enum MyTag {
-//! #     #[tag(lvl = "trace", msg = "simple")]
-//! #     Simple,
-//! #     #[tag(
-//! #         lvl = "info",
-//! #         msg = "all.features",
-//! #         icon = '🔐',
-//! #         macro = "all_features"
-//! #     )]
-//! #     AllFeatures,
+//! # tracing_forest::declare_tags! {
+//! #   use tracing_forest::Tag;
+//! #
+//! #   #[derive(Tag)]
+//! #   pub(crate) enum MyTag {
+//! #       #[tag(lvl = "trace", msg = "simple")]
+//! #       Simple,
+//! #       #[tag(
+//! #           lvl = "info",
+//! #           msg = "all.features",
+//! #           icon = '🔐',
+//! #           macro = "all_features"
+//! #       )]
+//! #       AllFeatures,
+//! #   }
 //! # }
 //! #[tracing_forest::main(tag = "MyTag")]
 //! fn main() {
 //!     use tracing_forest::Tag;
-//!     tracing::trace!(__event_tag = MyTag::Simple.as_field(), "a simple log");
+//!     tracing::trace!(__event_tag = crate::tracing_forest_tag::MyTag::Simple.as_field(), "a simple log");
 //!     all_features!("all the features wow");
 //! }
 //! ```
@@ -83,40 +95,43 @@
 //! # Example
 //!
 //! ```
-//! # use tracing_forest::Tag;
-//! #[derive(Tag)]
-//! enum KanidmTag {
-//!     #[tag(lvl = "info", msg = "admin.info", macro = "admin_info")]
-//!     AdminInfo,
-//!     #[tag(lvl = "warn", msg = "admin.warn", macro = "admin_warn")]
-//!     AdminWarn,
-//!     #[tag(lvl = "error", msg = "admin.error", macro = "admin_error")]
-//!     AdminError,
-//!     #[tag(lvl = "trace", msg = "request.trace", macro = "request_trace")]
-//!     RequestTrace,
-//!     #[tag(lvl = "info", msg = "request.info", macro = "request_info")]
-//!     RequestInfo,
-//!     #[tag(lvl = "warn", msg = "request.warn", macro = "request_warn")]
-//!     RequestWarn,
-//!     #[tag(lvl = "error", msg = "request.error", macro = "request_error")]
-//!     RequestError,
-//!     #[tag(lvl = "trace", msg = "security.access", icon = '🔓', macro = "security_access")]
-//!     SecurityAccess,
-//!     #[tag(lvl = "info", msg = "security.info", icon = '🔒', macro = "security_info")]
-//!     SecurityInfo,
-//!     #[tag(lvl = "error", msg = "security.critical", icon = '🔐', macro = "security_critical")]
-//!     SecurityCritical,
-//!     #[tag(lvl = "trace", msg = "filter.trace", macro = "filter_trace")]
-//!     FilterTrace,
-//!     #[tag(lvl = "info", msg = "filter.info", macro = "filter_info")]
-//!     FilterInfo,
-//!     #[tag(lvl = "warn", msg = "filter.warn", macro = "filter_warn")]
-//!     FilterWarn,
-//!     #[tag(lvl = "error", msg = "filter.error", macro = "filter_error")]
-//!     FilterError,
+//! tracing_forest::declare_tags! {
+//!     use tracing_forest::Tag;
+//!
+//!     #[derive(Tag)]
+//!     pub(crate) enum KanidmTag {
+//!         #[tag(lvl = "info", msg = "admin.info", macro = "admin_info")]
+//!         AdminInfo,
+//!         #[tag(lvl = "warn", msg = "admin.warn", macro = "admin_warn")]
+//!         AdminWarn,
+//!         #[tag(lvl = "error", msg = "admin.error", macro = "admin_error")]
+//!         AdminError,
+//!         #[tag(lvl = "trace", msg = "request.trace", macro = "request_trace")]
+//!         RequestTrace,
+//!         #[tag(lvl = "info", msg = "request.info", macro = "request_info")]
+//!         RequestInfo,
+//!         #[tag(lvl = "warn", msg = "request.warn", macro = "request_warn")]
+//!         RequestWarn,
+//!         #[tag(lvl = "error", msg = "request.error", macro = "request_error")]
+//!         RequestError,
+//!         #[tag(lvl = "trace", msg = "security.access", icon = '🔓', macro = "security_access")]
+//!         SecurityAccess,
+//!         #[tag(lvl = "info", msg = "security.info", icon = '🔒', macro = "security_info")]
+//!         SecurityInfo,
+//!         #[tag(lvl = "error", msg = "security.critical", icon = '🔐', macro = "security_critical")]
+//!         SecurityCritical,
+//!         #[tag(lvl = "trace", msg = "filter.trace", macro = "filter_trace")]
+//!         FilterTrace,
+//!         #[tag(lvl = "info", msg = "filter.info", macro = "filter_info")]
+//!         FilterInfo,
+//!         #[tag(lvl = "warn", msg = "filter.warn", macro = "filter_warn")]
+//!         FilterWarn,
+//!         #[tag(lvl = "error", msg = "filter.error", macro = "filter_error")]
+//!         FilterError,
+//!     }
 //! }
 //! ```
-use crate::{cfg_json, fail};
+use crate::{cfg_derive, cfg_json, fail};
 use tracing::Level;
 
 /// A type that can tag events with custom messages.
@@ -194,5 +209,59 @@ unsafe impl Tag for NoTag {
 
     fn from_field(value: u64) -> TagData {
         fail::tag_unset(value)
+    }
+}
+
+cfg_derive! {
+    /// A macro for helping define [`Tag`]s.
+    ///
+    /// This macro **must** be invoked at the crate root, otherwise any generated
+    /// macros will fail to compile when called.
+    ///
+    /// This macro helps ensure macro hygiene when tag macros are automatically
+    /// generated. It expands to a module in the crate root that the macros can
+    /// reach to when retreiving type signatures.
+    ///
+    /// # Examples
+    ///
+    /// Wrapping derived [`Tag`] declarations:
+    /// ```
+    /// tracing_forest::declare_tags! {
+    ///     use tracing_forest::Tag;
+    ///
+    ///     #[derive(Tag)]
+    ///     pub(crate) enum HelloTag {
+    ///         #[tag(lvl = "info", msg = "hello", macro = "hello")]
+    ///         Hello,
+    ///     }
+    /// }
+    /// ```
+    /// Linking to another module:
+    /// ```ignore
+    /// // tags.rs
+    /// use tracing_forest::Tag;
+    ///
+    /// #[derive(Tag)]
+    /// pub enum HelloTag {
+    ///     #[tag(lvl = "info", msg = "hello", macro = "hello")]
+    ///     Hello,
+    /// }
+    ///
+    /// // lib.rs
+    /// tracing_forest::declare_tags! { path = "tags.rs" }
+    /// ```
+    #[macro_export]
+    macro_rules! declare_tags {
+        (path = $path:literal) => {
+            #[macro_use]
+            #[path = $path]
+            pub mod tracing_forest_tag;
+        };
+        ($( $decl:item )*) => {
+            #[macro_use]
+            pub mod tracing_forest_tag {
+                $( $decl )*
+            }
+        };
     }
 }

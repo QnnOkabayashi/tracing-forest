@@ -1,19 +1,28 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
+use syn::parse::{Parse, ParseStream};
 
 pub fn tag(input: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(input as syn::DeriveInput);
-    let res = match &input.data {
-        syn::Data::Struct(data) => impl_struct(data, &input),
-        syn::Data::Enum(data) => impl_enum(data, &input),
-        syn::Data::Union(_) => Err(syn::Error::new_spanned(
-            input,
-            "union tags are not supported",
-        )),
-    };
+    // Check that it's visible at the crate level.
+    if let syn::Visibility::Restricted(vis) = &input.vis {
+        if syn::parse_str::<syn::Path>("crate").expect("Parsing failure") == *vis.path {
+            let res = match &input.data {
+                syn::Data::Struct(data) => impl_struct(data, &input),
+                syn::Data::Enum(data) => impl_enum(data, &input),
+                syn::Data::Union(_) => Err(syn::Error::new_spanned(
+                    input,
+                    "union tags are not supported",
+                )),
+            };
 
-    res.unwrap_or_else(|err| err.to_compile_error()).into()
+            return res.unwrap_or_else(|err| err.to_compile_error()).into();
+        }
+    }
+    syn::Error::new_spanned(input.vis, "must be visible in the crate, use `pub(crate)`")
+        .to_compile_error()
+        .into()
 }
 
 #[derive(Clone, Copy)]
@@ -25,31 +34,43 @@ enum Level {
     Error,
 }
 
-impl Level {
-    fn as_str(&self) -> &'static str {
-        match self {
-            Level::Trace => "trace",
-            Level::Debug => "debug",
-            Level::Info => "info",
-            Level::Warn => "warn",
-            Level::Error => "error",
+impl Parse for Level {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let ident = input.parse::<syn::Ident>()?;
+        match ident.to_string().as_str() {
+            "trace" => Ok(Level::Trace),
+            "debug" => Ok(Level::Debug),
+            "info" => Ok(Level::Info),
+            "warn" => Ok(Level::Warn),
+            "error" => Ok(Level::Error),
+            value => {
+                let message = format!("invalid level: {}", value);
+                Err(syn::Error::new_spanned(ident, message))
+            }
         }
     }
 }
 
-impl ToTokens for Level {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let constant = syn::Ident::new(
-            match self {
-                Level::Trace => "TRACE_ICON",
-                Level::Debug => "DEBUG_ICON",
-                Level::Info => "INFO_ICON",
-                Level::Warn => "WARN_ICON",
-                Level::Error => "ERROR_ICON",
-            },
-            proc_macro2::Span::call_site(),
-        );
-        quote! { ::tracing_forest::private::#constant }.to_tokens(tokens)
+impl Level {
+    fn quote(&self) -> TokenStream2 {
+        match self {
+            Level::Trace => quote! { trace },
+            Level::Debug => quote! { debug },
+            Level::Info => quote! { info },
+            Level::Warn => quote! { warn },
+            Level::Error => quote! { error },
+        }
+    }
+
+    fn quote_icon(&self) -> TokenStream2 {
+        let constant = match self {
+            Level::Trace => quote! { TRACE_ICON },
+            Level::Debug => quote! { DEBUG_ICON },
+            Level::Info => quote! { INFO_ICON },
+            Level::Warn => quote! { WARN_ICON },
+            Level::Error => quote! { ERROR_ICON },
+        };
+        quote! { ::tracing_forest::private::#constant }
     }
 }
 
@@ -62,7 +83,7 @@ struct TagRepr {
 
 struct TagMacro {
     ident: syn::Ident,
-    path: TokenStream2,
+    variant_path: TokenStream2,
 }
 
 impl ToTokens for TagRepr {
@@ -73,7 +94,7 @@ impl ToTokens for TagRepr {
             .as_ref()
             .map(|icon| quote! { #icon })
             .unwrap_or_else(|| {
-                let level = self.level;
+                let level = self.level.quote_icon();
                 quote! { #level }
             });
 
@@ -83,26 +104,27 @@ impl ToTokens for TagRepr {
 }
 
 impl TagRepr {
-    fn declare_macro(&self) -> TokenStream2 {
-        if let Some(TagMacro { ident, path }) = &self.tag_macro {
-            let level =
-                proc_macro2::Ident::new(self.level.as_str(), proc_macro2::Span::call_site());
+    fn declare_macro(&self) -> Option<TokenStream2> {
+        self.tag_macro.as_ref().map(|tag_macro| {
+            let TagMacro {
+                ident,
+                variant_path,
+            } = tag_macro;
+            let level = self.level.quote();
+
             quote! {
                 macro_rules! #ident {
                     ($tokens:tt) => {
                         ::tracing::#level!(
-                            __event_tag = ::tracing_forest::Tag::as_field({
-                                // extern crate self as my_crate;
-                                &self::#path
-                            }),
+                            __event_tag = ::tracing_forest::Tag::as_field(
+                                &$crate::tracing_forest_tag::#variant_path
+                            ),
                             $tokens
                         )
                     };
                 }
             }
-        } else {
-            quote! {}
-        }
+        })
     }
 }
 
@@ -215,7 +237,7 @@ fn parse_tag_attr(
                                         Ok(mut ident) => {
                                             ident.set_span(litstr.span());
                                             let path = path.clone();
-                                            tag_macro = Some(TagMacro { ident, path });
+                                            tag_macro = Some(TagMacro { ident, variant_path: path });
                                         }
                                         Err(_) => return Err(syn::Error::new_spanned(
                                             litstr,
@@ -279,7 +301,7 @@ fn impl_struct(data: &syn::DataStruct, input: &syn::DeriveInput) -> syn::Result<
     let from_arms = quote! { 0 => #tag, };
 
     let impl_trait = impl_trait(&input.ident, into_arms, from_arms);
-    let declare_macro = tag.declare_macro();
+    let declare_macro = tag.declare_macro().unwrap_or_else(|| quote! {});
     Ok(quote! {
         #impl_trait
         #declare_macro
@@ -311,7 +333,7 @@ fn impl_enum(data: &syn::DataEnum, input: &syn::DeriveInput) -> syn::Result<Toke
     let from_arms = quote! { #( #ids => #tags, )* };
 
     let impl_trait = impl_trait(&input.ident, into_arms, from_arms);
-    let declare_macros = tags.iter().map(TagRepr::declare_macro);
+    let declare_macros = tags.iter().filter_map(TagRepr::declare_macro);
 
     Ok(quote! {
         #impl_trait

@@ -4,19 +4,23 @@
 
 use tracing_subscriber::registry::{LookupSpan, SpanRef};
 
-use crate::fail;
-use crate::layer::{KeyValue, Tree, TreeAttrs, TreeEvent, TreeSpanOpened};
+use crate::layer::{KeyValue, Tree, TreeAttrs, TreeEvent};
 use crate::tag::TagData;
+use crate::{cfg_json, cfg_uuid};
 use std::fmt::{self, Write};
 use std::io;
+cfg_uuid! {
+    use crate::fail;
+    use crate::layer::TreeSpanOpened;
+}
 
 pub mod pretty;
 pub use pretty::Pretty;
 
-#[cfg(feature = "json")]
-pub mod json;
-#[cfg(feature = "json")]
-pub use json::Json;
+cfg_json! {
+    pub mod json;
+    pub use json::Json;
+}
 
 /// A type that formats [`Tree`]s into a buffer.
 ///
@@ -58,6 +62,7 @@ where
 
     #[cfg(feature = "chrono")]
     write!(writer, "{} ", attrs.timestamp.to_rfc3339())?;
+
     write!(writer, "{:<8} ", attrs.level)?;
 
     if let Some(span) = &span {

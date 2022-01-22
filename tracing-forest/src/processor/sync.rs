@@ -89,7 +89,7 @@ impl AsyncProcessor {
             }
         };
 
-        let processor = AsyncProcessor::from(tx);
+        let processor = AsyncProcessor { tx };
 
         (processor, handle)
     }

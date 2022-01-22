@@ -1,7 +1,3 @@
-//! Get the current [`Uuid`] from a subscriber.
-//!
-//! See [`id`]) for more details.
-
 use crate::fail;
 use crate::layer::TreeSpanOpened;
 use tracing::Subscriber;

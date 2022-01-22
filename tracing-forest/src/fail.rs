@@ -1,4 +1,5 @@
-/* layer */
+use crate::cfg_uuid;
+
 #[cold]
 pub fn span_not_in_context<T>() -> T {
     panic!("Span not in context, this is a bug");
@@ -14,23 +15,24 @@ pub fn multiple_tags_on_event() -> ! {
     panic!("More than one tag was passed to an event, this is likely a mistake");
 }
 
-/* id */
-#[cold]
-pub fn subscriber_not_found<'a, S>() -> &'a S {
-    panic!(
-        "Subscriber could not be downcasted to `{}`",
-        std::any::type_name::<S>()
-    );
-}
+cfg_uuid! {
+    #[cold]
+    pub fn subscriber_not_found<'a, S>() -> &'a S {
+        panic!(
+            "Subscriber could not be downcasted to `{}`",
+            std::any::type_name::<S>()
+        );
+    }
 
-#[cold]
-pub fn no_current_span<T>() -> T {
-    panic!("The subscriber isn't in any spans");
-}
+    #[cold]
+    pub fn no_current_span<T>() -> T {
+        panic!("The subscriber isn't in any spans");
+    }
 
-#[cold]
-pub fn no_tree_layer<T>() -> T {
-    panic!("The span has no `TreeSpan` in extensions, perhaps you forgot to add a `TreeLayer` to your subscriber?");
+    #[cold]
+    pub fn no_tree_layer<T>() -> T {
+        panic!("The span has no `TreeSpan` in extensions, perhaps you forgot to add a `TreeLayer` to your subscriber?");
+    }
 }
 
 /* tag */

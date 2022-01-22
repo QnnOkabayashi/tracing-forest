@@ -2,15 +2,16 @@
 //!
 //! See [`Processor`] for more details.
 
+use crate::cfg_sync;
 use crate::layer::{Tree, TreeLayer};
 
 pub mod blocking;
 pub use blocking::BlockingProcessor;
 
-#[cfg(feature = "sync")]
-pub mod sync;
-#[cfg(feature = "sync")]
-pub use sync::AsyncProcessor;
+cfg_sync! {
+    pub mod sync;
+    pub use sync::AsyncProcessor;
+}
 
 /// A type that can process [trace trees][crate::layer::Tree].
 ///
