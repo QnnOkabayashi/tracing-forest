@@ -1,6 +1,6 @@
 [package]
 name = "tracing-forest-macros"
-version = "0.1.0"
+version = "0.1.2"
 authors = ["Quinn Okabayashi"]
 edition = "2018"
 description = "Macros for tracing-forest"
