@@ -61,3 +61,6 @@ optional = true
 [dev-dependencies]
 tracing-forest = { path = ".", features = ["full"] }
 rand = "0.8.4"
+
+[package.metadata.docs.rs]
+all-features = true

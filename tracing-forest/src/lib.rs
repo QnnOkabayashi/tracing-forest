@@ -6,6 +6,7 @@
 //! [github-img]: https://img.shields.io/badge/github-8da0cb?style=for-the-badge&labelColor=555555&logo=github
 //! [crates-img]: https://img.shields.io/badge/crates.io-fc8d62?style=for-the-badge&labelColor=555555&logo=rust
 //! [docs-img]: https://img.shields.io/badge/docs.rs-66c2a5?style=for-the-badge&labelColor=555555&logoColor=white&logo=data:image/svg+xml;base64,PHN2ZyByb2xlPSJpbWciIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgdmlld0JveD0iMCAwIDUxMiA1MTIiPjxwYXRoIGZpbGw9IiNmNWY1ZjUiIGQ9Ik00ODguNiAyNTAuMkwzOTIgMjE0VjEwNS41YzAtMTUtOS4zLTI4LjQtMjMuNC0zMy43bC0xMDAtMzcuNWMtOC4xLTMuMS0xNy4xLTMuMS0yNS4zIDBsLTEwMCAzNy41Yy0xNC4xIDUuMy0yMy40IDE4LjctMjMuNCAzMy43VjIxNGwtOTYuNiAzNi4yQzkuMyAyNTUuNSAwIDI2OC45IDAgMjgzLjlWMzk0YzAgMTMuNiA3LjcgMjYuMSAxOS45IDMyLjJsMTAwIDUwYzEwLjEgNS4xIDIyLjEgNS4xIDMyLjIgMGwxMDMuOS01MiAxMDMuOSA1MmMxMC4xIDUuMSAyMi4xIDUuMSAzMi4yIDBsMTAwLTUwYzEyLjItNi4xIDE5LjktMTguNiAxOS45LTMyLjJWMjgzLjljMC0xNS05LjMtMjguNC0yMy40LTMzLjd6TTM1OCAyMTQuOGwtODUgMzEuOXYtNjguMmw4NS0zN3Y3My4zek0xNTQgMTA0LjFsMTAyLTM4LjIgMTAyIDM4LjJ2LjZsLTEwMiA0MS40LTEwMi00MS40di0uNnptODQgMjkxLjFsLTg1IDQyLjV2LTc5LjFsODUtMzguOHY3NS40em0wLTExMmwtMTAyIDQxLjQtMTAyLTQxLjR2LS42bDEwMi0zOC4yIDEwMiAzOC4ydi42em0yNDAgMTEybC04NSA0Mi41di03OS4xbDg1LTM4Ljh2NzUuNHptMC0xMTJsLTEwMiA0MS40LTEwMi00MS40di0uNmwxMDItMzguMiAxMDIgMzguMnYuNnoiPjwvcGF0aD48L3N2Zz4K
+//! 
 //! Preserve contextual coherence among trace data from concurrent tasks.
 //!
 //! # Overview
@@ -29,7 +30,6 @@
 //! [`tracing-subscriber`]: tracing_subscriber
 //! [`Layer`]: tracing_subscriber::layer::Layer
 //! [`Subscriber`]: tracing::subscriber::Subscriber
-//! [processes]: crate::processor::Processor
 //!
 //! # Getting started
 //!
@@ -48,7 +48,7 @@
 //! }
 //! ```
 //! For more configuration options, see the
-//! [`builder` module documentation][mod@crate::builder].
+//! [`builder` module documentation][mod@builder].
 //!
 //! # Contextual Coherence in action
 //!
@@ -159,26 +159,25 @@
 //!
 //! See the [`tag` module documentation][crate::tag] for details.
 //!
-//! # Attaching [`Uuid`]s to spans
+//! # Attaching `Uuid`s to spans
 //!
 //! By enabling the `uuid` feature flag, spans created in the context of a
-//! [`TreeLayer`] subscriber are assigned a [`Uuid`]. At the root level, the
-//! ID is randomly generated, whereas child spans adopt the ID of their
-//! parent.
+//! [`TreeLayer`] subscriber are assigned a `Uuid`. At the root level, the uuid 
+//! is randomly generated, whereas child spans adopt the uuid of their parent.
 //!
-//! ### Retreiving the current [`Uuid`]
+//! ### Retreiving the current `Uuid`
 //!
-//! To retreive the [`Uuid`] of the current span, use the [`id`] function.
+//! To retreive the uuid of the current span, use the [`id`] function.
 //!
-//! ### Initializing a span with a specific [`Uuid`]
+//! ### Initializing a span with a specific `Uuid`
 //!
-//! To set the [`Uuid`] of a new span, use [`uuid_span!`], or the shorthand
+//! To set the `Uuid` of a new span, use [`uuid_span!`], or the shorthand
 //! versions, [`uuid_trace_span!`], [`uuid_debug_span!`], [`uuid_info_span!`],
 //! [`uuid_warn_span!`], or [`uuid_error_span!`].
 //!
 //! ## Examples
 //!
-//! Passing in custom [`Uuid`]s to nested spans:
+//! Passing in custom `Uuid`s to nested spans:
 //! ```
 //! # use tracing_forest::uuid_trace_span;
 //! # use ::uuid::Uuid;
@@ -215,7 +214,7 @@
 //! d552ecfa-a568-4b68-9e68-a4f1f7918579 TRACE    ┕━ second [ 15.2µs | 19.794% ]
 //! ```
 //!
-//! Instrumenting a future with a span using a custom [`Uuid`]:
+//! Instrumenting a future with a span using a custom `Uuid`:
 //! ```
 //! # use tracing::{info, Instrument};
 //! # use ::uuid::Uuid;
@@ -318,240 +317,19 @@ pub mod private {
 pub use crate::builder::builder;
 pub use crate::layer::TreeLayer;
 pub use crate::tag::Tag;
+
 cfg_uuid! {
     pub use crate::uuid::id;
 }
 
 cfg_attributes! {
-    /// Marks test to run in the context of a [`TreeLayer`] subscriber,
-    /// suitable to test environment.
-    ///
-    /// For more configuration options, see the
-    /// [`builder` module documentation][mod@crate::builder].
-    ///
-    /// # Examples
-    ///
-    /// By default, logs are pretty-printed to stdout.
-    ///
-    /// ```
-    /// #[tracing_forest::test]
-    /// fn test_subscriber() {
-    ///     tracing::info!("Hello, world!");
-    /// }
-    /// ```
-    /// ```log
-    /// INFO     💬 [info]: Hello, world!
-    /// ```
-    /// Equivalent code not using `#[tracing_forest::test]`
-    /// ```
-    /// #[test]
-    /// fn test_subscriber() {
-    ///     tracing_forest::builder()
-    ///         .with_test_writer()
-    ///         .blocking_layer()
-    ///         .on_closure(|| {
-    ///             tracing::info!("Hello, world!");
-    ///         })
-    /// }
-    /// ```
-    ///
-    /// ### Tags and formatting
-    ///
-    /// Custom tags and formatting can be configured with the `tag` and `fmt`
-    /// arguments respectively. Currently, only `"pretty"` and `"json"` are
-    /// supported formats, and tag types must implement the [`Tag`] trait.
-    ///
-    /// ```
-    /// tracing_forest::declare_tags! {
-    ///     use tracing_forest::Tag;
-    ///
-    ///     #[derive(Tag)]
-    ///     pub(crate) enum GreetingTag {
-    ///         #[tag(lvl = "info", msg = "greeting", macro = "greeting")]
-    ///         Greeting,
-    ///     }
-    /// }
-    ///
-    /// #[tracing_forest::test(tag = "GreetingTag", fmt = "json")]
-    /// fn test_tag_and_formatted() {
-    ///     greeting!("Hello in JSON");
-    /// }
-    /// # fn main() {}
-    /// ```
-    /// ```json
-    /// {"level":"INFO","kind":{"Event":{"tag":,"message":"Hello in JSON","fields":{}}}}
-    /// ```
-    /// Equivalent code not using `#[tracing_forest::test]`
-    /// ```
-    /// tracing_forest::declare_tags! {
-    ///     use tracing_forest::Tag;
-    ///
-    ///     #[derive(Tag)]
-    ///     pub(crate) enum GreetingTag {
-    ///         #[tag(lvl = "info", msg = "greeting", macro = "greeting")]
-    ///         Greeting,
-    ///     }
-    /// }
-    ///
-    /// #[test]
-    /// fn test_tagsand_formatted() {
-    ///     tracing_forest::builder()
-    ///         .json()
-    ///         .with_test_writer()
-    ///         .with_tag::<crate::tracing_forest_tag::GreetingTag>()
-    ///         .blocking_layer()
-    ///         .on_closure(|| {
-    ///             tracing::info!("Hello, world!");
-    ///         })
-    /// }
-    /// # fn main() {}
-    /// ```
-    ///
-    /// ### Using with Tokio runtime
-    ///
-    /// When the `sync` feature is enabled, this attribute can also be proceeded by
-    /// the [`#[tokio::test]`][tokio::test] attribute to run the test in the context
-    /// of an async runtime.
-    /// ```
-    /// #[tracing_forest::test]
-    /// #[tokio::test]
-    /// async fn test_tokio() {
-    ///     tracing::info!("Hello from Tokio!");
-    /// }
-    /// ```
-    /// ```log
-    /// INFO     💬 [info]: Hello from Tokio!
-    /// ```
-    /// Equivalent code not using `#[tracing_forest::test]`
-    /// ```
-    /// #[tokio::test]
-    /// async fn test_tokio() {
-    ///     tracing_forest::builder()
-    ///         .with_test_writer()
-    ///         .async_layer()
-    ///         .on_future(async {
-    ///             tracing::info!("Hello from Tokio!");
-    ///         })
-    ///         .await
-    /// }
-    /// ```
+    #[doc(inline)]
     pub use tracing_forest_macros::test;
-
-    /// Marks function to run in the context of a [`TreeLayer`] subscriber.
-    ///
-    /// For more configuration options, see the
-    /// [`builder` module documentation][mod@crate::builder].
-    ///
-    /// # Examples
-    ///
-    /// By default, logs are pretty-printed to stdout.
-    ///
-    /// ```
-    /// # #[allow(clippy::needless_doctest_main)]
-    /// #[tracing_forest::main]
-    /// fn main() {
-    ///     tracing::info!("Hello, world!");
-    /// }
-    /// ```
-    /// ```log
-    /// INFO     💬 [info]: Hello, world!
-    /// ```
-    /// Equivalent code not using `#[tracing_forest::main]`
-    /// ```
-    /// # #[allow(clippy::needless_doctest_main)]
-    /// fn main() {
-    ///     tracing_forest::builder()
-    ///         .blocking_layer()
-    ///         .on_closure(|| {
-    ///             tracing::info!("Hello, world!");
-    ///         })
-    /// }
-    /// ```
-    ///
-    /// ### Tags and formatting
-    ///
-    /// Custom tags and formatting can be configured with the `tag` and `fmt`
-    /// arguments respectively. Currently, only `"pretty"` and `"json"` are
-    /// supported formats, and tag types must implement the [`Tag`] trait.
-    ///
-    /// ```
-    /// tracing_forest::declare_tags! {
-    ///     use tracing_forest::Tag;
-    ///
-    ///     #[derive(Tag)]
-    ///     pub(crate) enum GreetingTag {
-    ///         #[tag(lvl = "info", msg = "greeting", macro = "greeting")]
-    ///         Greeting,
-    ///     }
-    /// }
-    ///
-    /// #[tracing_forest::main(tag = "GreetingTag", fmt = "json")]
-    /// fn main() {
-    ///     greeting!("Hello in JSON");
-    /// }
-    /// ```
-    /// ```json
-    /// {"level":"INFO","kind":{"Event":{"tag":"greeting","message":"Hello in JSON","fields":{}}}}
-    /// ```
-    /// Equivalent code not using `#[tracing_forest::main]`
-    /// ```
-    /// tracing_forest::declare_tags! {
-    ///     use tracing_forest::Tag;
-    ///
-    ///     #[derive(Tag)]
-    ///     pub(crate) enum GreetingTag {
-    ///         #[tag(lvl = "info", msg = "greeting", macro = "greeting")]
-    ///         Greeting,
-    ///     }
-    /// }
-    ///
-    /// # #[allow(clippy::needless_doctest_main)]
-    /// fn main() {
-    ///     tracing_forest::builder()
-    ///         .json()
-    ///         .with_tag::<crate::tracing_forest_tag::GreetingTag>()
-    ///         .blocking_layer()
-    ///         .on_closure(|| {
-    ///             greeting!("Hello in JSON");
-    ///         })
-    /// }
-    /// ```
-    ///
-    /// ### Using with Tokio runtime
-    ///
-    /// When the `sync` feature is enabled, this attribute can also be proceeded by
-    /// the [`#[tokio::main]`][tokio::main] attribute to run the function in the
-    /// context of an async runtime.
-    /// ```
-    /// #[tracing_forest::main]
-    /// #[tokio::main(flavor = "current_thread")]
-    /// async fn main() {
-    ///     tracing::info!("Hello from Tokio!");
-    /// }
-    /// ```
-    /// ```log
-    /// INFO     💬 [info]: Hello from Tokio!
-    /// ```
-    /// Equivalent code not using `#[tracing_forest::main]`
-    /// ```
-    /// # #[allow(clippy::needless_doctest_main)]
-    /// #[tokio::main(flavor = "current_thread")]
-    /// async fn main() {
-    ///     tracing_forest::builder()
-    ///         .async_layer()
-    ///         .on_future(async {
-    ///             tracing::info!("Hello from Tokio!");
-    ///         })
-    ///         .await
-    /// }
-    /// ```
+    #[doc(inline)]
     pub use tracing_forest_macros::main;
 }
 
 cfg_derive! {
-    /// Derive macro generating an implementation of the [`Tag`] trait.
-    ///
-    /// See [`tag` module documentation][crate::tag] for details on how to define
-    /// and use tags.
+    #[doc(inline)]
     pub use tracing_forest_macros::Tag;
 }
