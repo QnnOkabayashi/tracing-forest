@@ -55,6 +55,7 @@ optional = true
 
 [dependencies.tracing-forest-macros]
 path = "../tracing-forest-macros"
+version = "*"
 optional = true
 
 [dev-dependencies]

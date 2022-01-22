@@ -1,14 +1,18 @@
 [package]
 name = "tracing-forest-macros"
 version = "0.1.0"
+authors = ["Quinn Okabayashi"]
 edition = "2018"
+description = "Macros for tracing-forest"
+license = "MIT"
+repository = "https://github.com/QnnOkabayashi/tracing-forest"
 
 [lib]
 proc-macro = true
 
 [features]
 sync = []
-derive = []
+derive = ["syn/derive"]
 attributes = []
 
 [dependencies]
@@ -17,4 +21,4 @@ proc-macro2 = "1.0"
 
 [dependencies.syn]
 version = "1.0"
-features = ["derive", "parsing"]
+features = ["parsing"]
