@@ -688,7 +688,7 @@ mod attribute_tests {
 
 mod builder_tests {
     use super::*;
-    use tracing::info;
+    use tracing_forest::prelude::*;
 
     mod blocking {
         use super::*;
@@ -721,7 +721,7 @@ mod builder_tests {
                 .with_test_writer()
                 .with_tag::<crate::tracing_forest_tag::BearTag>()
                 .blocking_layer()
-                .with(tracing_subscriber::filter::LevelFilter::WARN)
+                .with(LevelFilter::WARN)
                 .on_closure(|| {
                     brown_bear!("if it's brown get down");
                     black_bear!("if it's black fight back");
@@ -754,7 +754,7 @@ mod builder_tests {
                     .with_test_writer()
                     .with_tag::<crate::tracing_forest_tag::BearTag>()
                     .async_layer()
-                    .with(tracing_subscriber::filter::LevelFilter::WARN)
+                    .with(LevelFilter::WARN)
                     .on_future(async {
                         brown_bear!("if it's brown get down");
                         black_bear!("if it's black fight back");

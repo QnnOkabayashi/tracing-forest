@@ -22,6 +22,7 @@
 //! Running asynchronously with a custom tag, writing to stderr, formatting with
 //! pretty, and filtering out some logs.
 //! ```
+//! # use tracing_forest::prelude::*;
 //! tracing_forest::declare_tags! {
 //!     use tracing_forest::Tag;
 //!
@@ -43,7 +44,7 @@
 //!     .with_writer(std::io::stderr)
 //!     .with_tag::<BearTag>()
 //!     .blocking_layer()
-//!     .with(tracing_subscriber::filter::LevelFilter::WARN)
+//!     .with(LevelFilter::WARN)
 //!     .on_closure(|| {
 //!         brown_bear!("if it's brown get down");
 //!         black_bear!("if it's black fight back");
@@ -397,9 +398,10 @@ where
     ///
     /// # Examples
     /// ```
+    /// # use tracing_forest::prelude::*;
     /// tracing_forest::builder()
     ///     .blocking_layer()
-    ///     .with(tracing_subscriber::filter::LevelFilter::INFO)
+    ///     .with(LevelFilter::INFO)
     ///     .on_closure(|| {
     ///         // do stuff here...
     ///     })

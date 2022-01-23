@@ -59,12 +59,13 @@
 //! ```
 //! # use std::time::Duration;
 //! # use tokio::time::sleep;
+//! # use tracing_forest::prelude::*;
 //! # #[tracing_forest::test]
 //! # #[tokio::test]
 //! # async fn test_contextual_coherence() {
 //! let evens = async {
 //!     for i in 0..3 {
-//!         tracing::info!("{}", i * 2);
+//!         info!("{}", i * 2);
 //!         // pause for `odds`
 //!         sleep(Duration::from_millis(100)).await;
 //!     }
@@ -74,7 +75,7 @@
 //!     // pause for `evens`
 //!     sleep(Duration::from_millis(50)).await;
 //!     for i in 0..3 {
-//!         tracing::info!("{}", i * 2 + 1);
+//!         info!("{}", i * 2 + 1);
 //!         // pause for `evens`
 //!         sleep(Duration::from_millis(100)).await;
 //!     }
@@ -97,14 +98,14 @@
 //! ```
 //! # use std::time::Duration;
 //! # use tokio::time::sleep;
-//! # use tracing::Instrument;
+//! # use tracing_forest::prelude::*;
 //! # #[tracing_forest::main]
 //! # #[tokio::main(flavor = "current_thread")]
 //! # async fn concurrent_counting() {
 //! let evens = async {
 //!     // ...
 //! #   for i in 0..3 {
-//! #       tracing::info!("{}", i * 2);
+//! #       info!("{}", i * 2);
 //! #       sleep(Duration::from_millis(100)).await;
 //! #   }
 //! }.instrument(tracing::trace_span!("counting_evens"));
@@ -113,7 +114,7 @@
 //!     // ...
 //! #   sleep(Duration::from_millis(50)).await;
 //! #   for i in 0..3 {
-//! #       tracing::info!("{}", i * 2 + 1);
+//! #       info!("{}", i * 2 + 1);
 //! #       sleep(Duration::from_millis(100)).await;
 //! #   }
 //! }.instrument(tracing::trace_span!("counting_odds"));
@@ -216,7 +217,7 @@
 //!
 //! Instrumenting a future with a span using a custom `Uuid`:
 //! ```
-//! # use tracing::{info, Instrument};
+//! # use tracing_forest::prelude::*;
 //! # use ::uuid::Uuid;
 //! # #[tracing_forest::test]
 //! # #[tokio::test]
@@ -243,7 +244,7 @@
 //! ## Example
 //!
 //! ```
-//! # use tracing::{info, trace_span};
+//! # use tracing_forest::prelude::*;
 //! # #[tracing_forest::test]
 //! # fn test_immediate() {
 //! trace_span!("my_span").in_scope(|| {
@@ -280,6 +281,9 @@
 //! [derive]: tracing_forest_macros::Tag
 //! [attr_test]: tracing_forest_macros::test
 //! [attr_main]: tracing_forest_macros::main
+
+// Re-exports of useful components
+pub mod prelude;
 
 pub mod builder;
 pub mod formatter;
