@@ -83,6 +83,9 @@ use tracing_subscriber::fmt::{MakeWriter, TestWriter};
 use tracing_subscriber::layer::Layered;
 use tracing_subscriber::{Layer, Registry};
 
+#[cfg(feature = "env-filter")]
+use tracing_subscriber::filter::EnvFilter;
+
 /// Creates a new [`LayerBuilder`] to configure a [`Subscriber`] with a
 /// [`TreeLayer`]. This is the prefered method for using a [`TreeLayer`].
 ///
@@ -414,6 +417,31 @@ where
             subscriber: layer.with_subscriber(self.subscriber),
             extensions: self.extensions,
         }
+    }
+
+    /// Adds an environment filter to this subscriber. This is based on the
+    /// [`tracing_subscriber`] [`EnvFilter`] and uses the same `RUST_LOG` syntax.
+    ///
+    /// If the `RUST_LOG` environment value is not found, this will default to `info`.
+    ///
+    /// # Examples
+    /// ```
+    /// # use tracing_forest::prelude::*;
+    /// tracing_forest::builder()
+    ///     .blocking_layer()
+    ///     .with_env_filter()
+    ///     .on_closure(|| {
+    ///         // do stuff here...
+    ///     })
+    /// ```
+    #[cfg(feature = "env-filter")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "env-filter")))]
+    pub fn with_env_filter(self) -> SubscriberBuilder<Layered<EnvFilter, S>, E>
+    {
+        let filter_layer = EnvFilter::try_from_default_env()
+            .or_else(|_| EnvFilter::try_new("info"))
+            .expect("Failed to construct envfilter - this is a bug!");
+        self.with(filter_layer)
     }
 }
 

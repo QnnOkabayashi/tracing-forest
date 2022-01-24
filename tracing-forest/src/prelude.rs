@@ -36,9 +36,4 @@ pub use tracing;
 #[cfg(feature = "attributes")]
 pub use tracing::instrument;
 
-pub mod filter {
-    pub use tracing_subscriber::filter::LevelFilter;
-    #[cfg(feature = "env-filter")]
-    pub use tracing_subscriber::filter::EnvFilter;
-}
-
+pub use tracing_subscriber::filter::LevelFilter;
