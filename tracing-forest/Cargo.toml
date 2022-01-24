@@ -18,8 +18,9 @@ default = []
 full = ["uuid", "chrono", "smallvec", "sync", "json", "derive", "attributes"]
 sync = ["tokio", "tracing-forest-macros/sync"]
 derive = ["tracing-forest-macros/derive"]
-attributes = ["tracing-forest-macros/attributes"]
+attributes = ["tracing-forest-macros/attributes", "tracing/attributes"]
 json = ["serde", "serde_json"]
+env-filter = ["tracing-subscriber/env-filter", "tracing-subscriber/std"]
 
 [dependencies]
 tracing = "0.1"
