@@ -44,10 +44,8 @@ impl Pretty {
     /// # Examples
     /// ```
     /// # use tracing_forest::formatter::Pretty;
-    /// # use tracing_forest::processor::{BlockingProcessor, Processor};
-    /// let pretty_subscriber = BlockingProcessor::new(Pretty::new(), std::io::stdout)
-    ///     .into_layer()
-    ///     .into_subscriber();
+    /// # use tracing_forest::processor::{Printer, Processor};
+    /// let processor = Printer::new(Pretty::new(), std::io::stdout);
     /// ```
     pub const fn new() -> Self {
         Pretty { _priv: () }
@@ -83,12 +81,12 @@ impl Edge {
 
 fn format_attrs(attrs: &TreeAttrs, writer: &mut Vec<u8>) -> io::Result<()> {
     #[cfg(feature = "uuid")]
-    write!(writer, "{} ", attrs.uuid)?;
+    write!(writer, "{} ", attrs.uuid())?;
 
     #[cfg(feature = "chrono")]
-    write!(writer, "{:<32} ", attrs.timestamp.to_rfc3339())?;
+    write!(writer, "{:<32} ", attrs.timestamp().to_rfc3339())?;
 
-    write!(writer, "{:<8} ", attrs.level)
+    write!(writer, "{:<8} ", attrs.level())
 }
 
 fn format_indent(indent: &mut Vec<Edge>, writer: &mut Vec<u8>) -> io::Result<()> {
@@ -98,11 +96,17 @@ fn format_indent(indent: &mut Vec<Edge>, writer: &mut Vec<u8>) -> io::Result<()>
 }
 
 fn format_event(event: &TreeEvent, level: Level, writer: &mut Vec<u8>) -> io::Result<()> {
-    let tag = event.tag.unwrap_or_else(|| TagData::from(level));
+    let tag = event.tag().unwrap_or_else(|| TagData::from(level));
 
-    write!(writer, "{} [{}]: {}", tag.icon, tag.message, event.message)?;
+    write!(
+        writer,
+        "{} [{}]: {}",
+        tag.icon,
+        tag.message,
+        event.message()
+    )?;
 
-    for KeyValue { key, value } in event.fields.iter() {
+    for KeyValue { key, value } in event.fields().iter() {
         write!(writer, " | {}: {}", key, value)?;
     }
 
@@ -115,26 +119,26 @@ fn format_span(
     indent: &mut Vec<Edge>,
     writer: &mut Vec<u8>,
 ) -> io::Result<()> {
-    let duration_total = span.duration_total.as_nanos() as f64;
-    let duration_nested = span.duration_nested.as_nanos() as u64;
-    let duration_root = duration_root.unwrap_or(duration_total);
-    let load_total = 100.0 * duration_total / duration_root;
+    let duration_total = span.total_duration().as_nanos() as f64;
+    let duration_nested = span.inner_duration().as_nanos() as u64;
+    let root_duration = duration_root.unwrap_or(duration_total);
+    let load_total = 100.0 * duration_total / root_duration;
 
     write!(
         writer,
         "{} [ {} | ",
-        span.name,
+        span.name(),
         DurationDisplay(duration_total)
     )?;
 
     if duration_nested > 0 {
-        let load_direct = 100.0 * (duration_total - duration_nested as f64) / duration_root;
+        let load_direct = 100.0 * (duration_total - duration_nested as f64) / root_duration;
         write!(writer, "{:.3}% / ", load_direct)?;
     }
 
     writeln!(writer, "{:.3}% ]", load_total)?;
 
-    if let Some((last, remaining)) = span.children.split_last() {
+    if let Some((last, remaining)) = span.children().split_last() {
         match indent.last_mut() {
             Some(edge @ Edge::Turn) => *edge = Edge::Null,
             Some(edge @ Edge::Fork) => *edge = Edge::Line,
@@ -147,13 +151,13 @@ fn format_span(
             if let Some(edge) = indent.last_mut() {
                 *edge = Edge::Turn;
             }
-            format_tree(tree, Some(duration_root), indent, writer)?;
+            format_tree(tree, Some(root_duration), indent, writer)?;
         }
 
         if let Some(edge) = indent.last_mut() {
             *edge = Edge::Turn;
         }
-        format_tree(last, Some(duration_root), indent, writer)?;
+        format_tree(last, Some(root_duration), indent, writer)?;
 
         indent.pop();
     }
@@ -172,7 +176,7 @@ fn format_tree(
     format_indent(indent, writer)?;
 
     match &tree.kind {
-        TreeKind::Event(event) => format_event(event, tree.attrs.level, writer),
+        TreeKind::Event(event) => format_event(event, tree.attrs.level(), writer),
         TreeKind::Span(span) => format_span(span, duration_root, indent, writer),
     }
 }
