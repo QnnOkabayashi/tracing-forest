@@ -41,3 +41,11 @@ use crate::tag::TagData;
 pub fn tag_unset(id: u64) -> TagData {
     panic!("No tag type set, but a tag was received: {}. If this is intentional, ensure that none of your field names are `{}` to avoid this.", id, crate::layer::TAG_KEY);
 }
+
+/* processor */
+#[cold]
+pub fn processing_error<E>(_: E) {
+    panic!(
+        "Processing logs failed. Try using a fallback processor with `Processor::with_fallback`."
+    );
+}

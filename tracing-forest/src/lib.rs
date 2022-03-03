@@ -36,13 +36,14 @@
 //! The easiest way to get started is to enable all features. Do this by
 //! adding the following to your `Cargo.toml` file:
 //! ```toml
-//! tracing-forest = { version = "1", features = ["full"] }
+//! tracing-forest = { version = "0.1", features = ["full"] }
 //! ```
 //! Then, add the [`#[tracing_forest::main]`][attr_main] attribute to your main function:
 //! ```
 //! # #[allow(clippy::needless_doctest_main)]
 //! #[tracing_forest::main]
-//! fn main() {
+//! #[tokio::main]
+//! async fn main() {
 //!     // do stuff here...
 //!     tracing::trace!("Hello, world!");
 //! }
@@ -59,9 +60,9 @@
 //! ```
 //! # use std::time::Duration;
 //! # use tokio::time::sleep;
-//! # #[tracing_forest::test]
 //! # #[tokio::test]
 //! # async fn test_contextual_coherence() {
+//! # tracing_forest::new().on_registry().on(async {
 //! let evens = async {
 //!     for i in 0..3 {
 //!         tracing::info!("{}", i * 2);
@@ -81,6 +82,7 @@
 //! };
 //!
 //! let _ = tokio::join!(evens, odds);
+//! # }).await;
 //! # }
 //! ```
 //! ```log
@@ -98,9 +100,9 @@
 //! # use std::time::Duration;
 //! # use tokio::time::sleep;
 //! # use tracing::Instrument;
-//! # #[tracing_forest::main]
 //! # #[tokio::main(flavor = "current_thread")]
 //! # async fn concurrent_counting() {
+//! # tracing_forest::new().on_registry().on(async {
 //! let evens = async {
 //!     // ...
 //! #   for i in 0..3 {
@@ -119,6 +121,7 @@
 //! }.instrument(tracing::trace_span!("counting_odds"));
 //!     
 //! let _ = tokio::join!(evens, odds);
+//! # }).await;
 //! # }
 //! ```
 //! ```log
@@ -281,7 +284,9 @@
 //! [attr_test]: tracing_forest_macros::test
 //! [attr_main]: tracing_forest_macros::main
 
-pub mod builder;
+cfg_sync! {
+    pub mod builder;
+}
 pub mod formatter;
 pub mod layer;
 pub mod processor;
@@ -314,7 +319,7 @@ pub mod private {
     pub const ERROR_ICON: char = '🚨';
 }
 
-pub use crate::builder::builder;
+pub use crate::builder::{capture, new};
 pub use crate::layer::TreeLayer;
 pub use crate::tag::Tag;
 
@@ -332,4 +337,8 @@ cfg_attributes! {
 cfg_derive! {
     #[doc(inline)]
     pub use tracing_forest_macros::Tag;
+}
+
+mod sealed {
+    pub trait Sealed {}
 }

@@ -18,10 +18,8 @@ impl Json<true> {
     /// # Examples
     /// ```
     /// # use tracing_forest::formatter::Json;
-    /// # use tracing_forest::processor::{BlockingProcessor, Processor};
-    /// let json_subscriber = BlockingProcessor::new(Json::compact(), std::io::stdout)
-    ///     .into_layer()
-    ///     .into_subscriber();
+    /// # use tracing_forest::processor::{Printer, Processor};
+    /// let processor = Printer::new(Json::compact(), std::io::stdout);
     /// ```
     pub const fn compact() -> Self {
         Json { _priv: () }
@@ -41,10 +39,8 @@ impl Json<false> {
     /// # Examples
     /// ```
     /// # use tracing_forest::formatter::Json;
-    /// # use tracing_forest::processor::{BlockingProcessor, Processor};
-    /// let json_pretty_subscriber = BlockingProcessor::new(Json::pretty(), std::io::stdout)
-    ///     .into_layer()
-    ///     .into_subscriber();
+    /// # use tracing_forest::processor::{Printer, Processor};
+    /// let processor = Printer::new(Json::pretty(), std::io::stdout);
     /// ```
     pub const fn pretty() -> Self {
         Json { _priv: () }

@@ -47,7 +47,7 @@ where
     S: for<'a> LookupSpan<'a>,
 {
     // uuid timestamp LEVEL root > inner > leaf > my message here | key: val
-    let tag = TagData::from(attrs.level);
+    let tag = TagData::from(attrs.level());
     let mut writer = format!("{icon} IMMEDIATE {icon} ", icon = tag.icon);
 
     #[cfg(feature = "uuid")]
@@ -61,9 +61,9 @@ where
     }
 
     #[cfg(feature = "chrono")]
-    write!(writer, "{} ", attrs.timestamp.to_rfc3339())?;
+    write!(writer, "{} ", attrs.timestamp().to_rfc3339())?;
 
-    write!(writer, "{:<8} ", attrs.level)?;
+    write!(writer, "{:<8} ", attrs.level())?;
 
     if let Some(span) = &span {
         for ancestor in span.scope().from_root() {
@@ -71,9 +71,9 @@ where
         }
     }
 
-    write!(writer, "{}", event.message)?;
+    write!(writer, "{}", event.message())?;
 
-    for KeyValue { key, value } in event.fields.iter() {
+    for KeyValue { key, value } in event.fields().iter() {
         write!(writer, " | {}: {}", key, value)?;
     }
 

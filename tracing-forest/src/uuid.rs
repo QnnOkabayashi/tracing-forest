@@ -51,19 +51,21 @@ pub fn from_u64_pair(msb: u64, lsb: u64) -> Uuid {
     ])
 }
 
-/// Gets the current [`Uuid`] of an entered span within a [`TreeLayer`]
+/// Gets the current [`Uuid`] of an entered span within a `tracing-forest`
 /// subscriber.
 ///
 /// # Examples
 ///
 /// ```
 /// # use tracing::trace_span;
-/// # #[tracing_forest::main]
-/// # fn main() {
+/// # #[tokio::main]
+/// # async fn main() {
+/// # tracing_forest::new().on_registry().on(async {
 /// trace_span!("my_span").in_scope(|| {
 ///     let id = tracing_forest::id();
 ///     tracing::info!("The current id is: {}", id);
 /// })
+/// # }).await;
 /// # }
 /// ```
 ///

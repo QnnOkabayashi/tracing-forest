@@ -15,11 +15,12 @@ repository = "https://github.com/QnnOkabayashi/tracing-forest"
 
 [features]
 default = []
-full = ["uuid", "chrono", "smallvec", "sync", "json", "derive", "attributes"]
+full = ["uuid", "chrono", "smallvec", "sync", "json", "derive", "attributes", "env-filter"]
 sync = ["tokio", "tracing-forest-macros/sync"]
 derive = ["tracing-forest-macros/derive"]
 attributes = ["tracing-forest-macros/attributes"]
 json = ["serde", "serde_json"]
+env-filter = ["tracing-subscriber/env-filter"]
 
 [dependencies]
 tracing = "0.1"
@@ -61,6 +62,7 @@ optional = true
 [dev-dependencies]
 tracing-forest = { path = ".", features = ["full"] }
 rand = "0.8.4"
+tokio = { version = "1", features = ["full"] }
 
 [package.metadata.docs.rs]
 all-features = true

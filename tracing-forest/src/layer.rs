@@ -19,8 +19,9 @@
 //!
 //! [`Formatter`]: crate::formatter::Formatter
 
-use crate::formatter::format_immediate;
-use crate::processor::Processor;
+use crate::builder::MakeStdout;
+use crate::formatter::{format_immediate, Pretty};
+use crate::processor::{Printer, Processor};
 use crate::tag::{NoTag, Tag, TagData, TagParser};
 use crate::{cfg_chrono, cfg_json, cfg_uuid, fail};
 #[cfg(feature = "smallvec")]
@@ -30,8 +31,6 @@ use std::{borrow::Cow, fmt};
 use tracing::field::{Field, Visit};
 use tracing::span::Attributes;
 use tracing::{Event, Id, Level, Subscriber};
-use tracing_subscriber::layer::Layered;
-use tracing_subscriber::Registry;
 use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 cfg_json! {
     use crate::ser;
@@ -62,13 +61,13 @@ pub(crate) const TAG_KEY: &str = "__event_tag";
 /// A [`Layer`] that tracks and maintains contextual coherence.
 ///
 /// See the [top-level documentation][crate] for details on how to use.
+#[derive(Debug)]
 pub struct TreeLayer<P> {
     processor: P,
     tag_parser: TagParser,
 }
 
 impl<P: Processor> TreeLayer<P> {
-    /// Create a new `TreeLayer` from a [`Processor`].
     pub fn new(processor: P) -> Self {
         TreeLayer {
             processor,
@@ -76,15 +75,100 @@ impl<P: Processor> TreeLayer<P> {
         }
     }
 
-    /// Compose the `TreeLayer` onto a [`Registry`].
-    pub fn into_subscriber(self) -> Layered<Self, Registry> {
-        self.with_subscriber(Registry::default())
-    }
-
     /// Set the accepted [`Tag`] type of the `TreeLayer`.
     pub fn tag<T: Tag>(mut self) -> Self {
         self.tag_parser = T::from_field;
         self
+    }
+
+    // Placeholder API for when we deprecate the `Tag` trait
+    // and just use a function.
+    pub fn set_tag(mut self, tag_parser: TagParser) -> Self {
+        self.tag_parser = tag_parser;
+        self
+    }
+
+    fn parse_event(&self, event: &Event) -> (TreeAttrs, TreeEvent, bool) {
+        struct EventVisitor {
+            immediate: bool,
+            tag: Option<TagData>,
+            message: Cow<'static, str>,
+            fields: Fields,
+            tag_parser: TagParser,
+        }
+
+        impl EventVisitor {
+            fn new(tag_parser: TagParser) -> Self {
+                EventVisitor {
+                    immediate: false,
+                    tag: None,
+                    message: Cow::from("<no message>"),
+                    fields: Fields::new(),
+                    tag_parser,
+                }
+            }
+        }
+
+        impl Visit for EventVisitor {
+            fn record_bool(&mut self, field: &Field, value: bool) {
+                match field.name() {
+                    "immediate" => self.immediate = value,
+                    _ => self.record_debug(field, &value),
+                }
+            }
+
+            fn record_u64(&mut self, field: &Field, value: u64) {
+                match field.name() {
+                    TAG_KEY => {
+                        if self.tag.is_some() {
+                            fail::multiple_tags_on_event();
+                        }
+                        self.tag = Some((self.tag_parser)(value));
+                    }
+                    _ => self.record_debug(field, &value),
+                }
+            }
+
+            fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+                let value = format!("{:?}", value);
+                match field.name() {
+                    // Only the first "message" is the message
+                    "message" if matches!(self.message, Cow::Borrowed(_)) => {
+                        self.message = Cow::from(value)
+                    }
+                    key => self.fields.push(KeyValue { key, value }),
+                }
+            }
+        }
+
+        let mut visitor = EventVisitor::new(self.tag_parser);
+
+        event.record(&mut visitor);
+
+        let tree_event = TreeEvent {
+            tag: visitor.tag,
+            message: visitor.message,
+            fields: visitor.fields,
+        };
+
+        let tree_attrs = TreeAttrs {
+            #[cfg(feature = "uuid")]
+            uuid: DEFAULT_EVENT_UUID,
+            #[cfg(feature = "chrono")]
+            timestamp: Utc::now(),
+            level: *event.metadata().level(),
+        };
+
+        (tree_attrs, tree_event, visitor.immediate)
+    }
+}
+
+impl Default for TreeLayer<Printer<Pretty, MakeStdout>> {
+    fn default() -> Self {
+        Self {
+            processor: Printer::default(),
+            tag_parser: NoTag::from_field,
+        }
     }
 }
 
@@ -94,41 +178,123 @@ impl<P: Processor> TreeLayer<P> {
 pub struct Tree {
     /// Shared fields associated with both spans and events.
     #[cfg_attr(feature = "json", serde(flatten))]
-    pub attrs: TreeAttrs,
+    pub(crate) attrs: TreeAttrs,
     /// Fields specific to either a span or an event.
-    pub kind: TreeKind,
+    pub(crate) kind: TreeKind,
 }
 
 impl Tree {
-    /// Create a new `Tree`.
     fn new(attrs: TreeAttrs, kind: impl Into<TreeKind>) -> Self {
         Tree {
             attrs,
             kind: kind.into(),
         }
     }
+
+    cfg_uuid! {
+        /// Get the [`Uuid`].
+        pub fn uuid(&self) -> Uuid {
+            self.attrs.uuid()
+        }
+    }
+
+    cfg_chrono! {
+        /// Get the [`DateTime`].
+        pub fn timestamp(&self) -> DateTime<Utc> {
+            self.attrs.timestamp()
+        }
+    }
+
+    /// Returns the [`Level`].
+    pub fn level(&self) -> Level {
+        self.attrs.level()
+    }
+
+    /// Returns a reference to the [`TreeEvent`], if the tree is an event.
+    pub fn event(&self) -> Result<&TreeEvent, KindError> {
+        match &self.kind {
+            TreeKind::Event(event) => Ok(event),
+            TreeKind::Span(_) => Err(KindError { is_event: false }),
+        }
+    }
+
+    /// Returns a reference to the [`TreeSpan`], if the tree is a span.
+    pub fn span(&self) -> Result<&TreeSpan, KindError> {
+        match &self.kind {
+            TreeKind::Event(_) => Err(KindError { is_event: true }),
+            TreeKind::Span(span) => Ok(span),
+        }
+    }
+
+    /// Returns the [`TreeEvent`], if the tree is an event.
+    pub fn into_event(self) -> Result<TreeEvent, KindError> {
+        match self.kind {
+            TreeKind::Event(event) => Ok(event),
+            TreeKind::Span(_) => Err(KindError { is_event: false }),
+        }
+    }
+
+    /// Returns the [`TreeSpan`], if the tree is a span.
+    pub fn into_span(self) -> Result<TreeSpan, KindError> {
+        match self.kind {
+            TreeKind::Event(_) => Err(KindError { is_event: true }),
+            TreeKind::Span(span) => Ok(span),
+        }
+    }
 }
 
-/// The shared attributes of both spans and events within a [`Tree`].
+/// Error returned by [`Tree::event`] and [`Tree::span`].
+#[derive(Debug)]
+pub struct KindError {
+    is_event: bool,
+}
+
+impl fmt::Display for KindError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.is_event {
+            write!(f, "Found event")
+        } else {
+            write!(f, "Found span")
+        }
+    }
+}
+
+impl std::error::Error for KindError {}
+
 #[derive(Debug)]
 #[cfg_attr(feature = "json", derive(Serialize))]
-pub struct TreeAttrs {
-    /// The ID that this trace data is associated with.
+pub(crate) struct TreeAttrs {
     #[cfg(feature = "uuid")]
-    pub uuid: Uuid,
-    /// When the trace data was collected.
+    uuid: Uuid,
     #[cfg(feature = "chrono")]
     #[cfg_attr(feature = "json", serde(serialize_with = "ser::timestamp"))]
-    pub timestamp: DateTime<Utc>,
-    /// Level the trace data was collected with.
+    timestamp: DateTime<Utc>,
     #[cfg_attr(feature = "json", serde(serialize_with = "ser::level"))]
-    pub level: Level,
+    level: Level,
+}
+
+impl TreeAttrs {
+    cfg_uuid! {
+        pub fn uuid(&self) -> Uuid {
+            self.uuid
+        }
+    }
+
+    cfg_chrono! {
+        pub fn timestamp(&self) -> DateTime<Utc> {
+            self.timestamp
+        }
+    }
+
+    pub fn level(&self) -> Level {
+        self.level
+    }
 }
 
 /// The kind of log, either a [`TreeEvent`] or a [`TreeSpan`].
 #[derive(Debug)]
 #[cfg_attr(feature = "json", derive(Serialize))]
-pub enum TreeKind {
+pub(crate) enum TreeKind {
     Event(TreeEvent),
     Span(TreeSpan),
 }
@@ -138,12 +304,79 @@ pub enum TreeKind {
 #[cfg_attr(feature = "json", derive(Serialize))]
 pub struct TreeEvent {
     /// An optional tag that the event was collected with.
-    pub tag: Option<TagData>,
+    tag: Option<TagData>,
     /// The message associated with the event.
-    pub message: Cow<'static, str>,
+    message: Cow<'static, str>,
     /// Key-value data.
     #[cfg_attr(feature = "json", serde(serialize_with = "ser::fields"))]
-    pub fields: Fields,
+    fields: Fields,
+}
+
+impl TreeEvent {
+    /// Get the event's message.
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
+    /// Get the event's tag message, if there was a tag.
+    pub fn tag(&self) -> Option<TagData> {
+        self.tag
+    }
+
+    /// Gets a slice of the event's key-value pairs.
+    pub fn fields(&self) -> &[KeyValue] {
+        &self.fields
+    }
+}
+
+/// Information unique to logged spans.
+#[derive(Debug)]
+#[cfg_attr(feature = "json", derive(Serialize))]
+pub struct TreeSpan {
+    name: &'static str,
+    #[cfg_attr(
+        feature = "json",
+        serde(rename = "nanos_total", serialize_with = "ser::nanos")
+    )]
+    total_duration: Duration,
+    #[cfg_attr(
+        feature = "json",
+        serde(rename = "nanos_nested", serialize_with = "ser::nanos")
+    )]
+    inner_duration: Duration,
+    pub(crate) children: Vec<Tree>,
+}
+
+impl TreeSpan {
+    /// Returns the name of the span.
+    pub fn name(&self) -> &'static str {
+        self.name
+    }
+
+    /// Returns the total duration the span was open for.
+    pub fn total_duration(&self) -> Duration {
+        self.total_duration
+    }
+
+    /// Returns the duration the span spent inside inner spans.
+    pub fn inner_duration(&self) -> Duration {
+        self.inner_duration
+    }
+
+    /// Returns the duration the span spent while not inside inner spans.
+    pub fn base_duration(&self) -> Duration {
+        self.total_duration - self.inner_duration
+    }
+
+    /// Returns the log trees within the span.
+    pub fn children(&self) -> &[Tree] {
+        &self.children
+    }
+
+    /// Returns `true` is the span contains no children.
+    pub fn is_empty(&self) -> bool {
+        self.children.is_empty()
+    }
 }
 
 impl From<TreeEvent> for TreeKind {
@@ -156,46 +389,6 @@ impl From<TreeSpan> for TreeKind {
     fn from(span: TreeSpan) -> Self {
         TreeKind::Span(span)
     }
-}
-
-impl TreeKind {
-    /// Converts into a [`TreeEvent`], if the kind is `Event`.
-    pub fn into_event(self) -> Option<TreeEvent> {
-        match self {
-            TreeKind::Event(event) => Some(event),
-            TreeKind::Span(_) => None,
-        }
-    }
-
-    /// Converts into a [`TreeSpan`], if the kind is `Span`.
-    pub fn into_span(self) -> Option<TreeSpan> {
-        match self {
-            TreeKind::Event(_) => None,
-            TreeKind::Span(span) => Some(span),
-        }
-    }
-}
-
-/// Information unique to logged spans.
-#[derive(Debug)]
-#[cfg_attr(feature = "json", derive(Serialize))]
-pub struct TreeSpan {
-    /// The name of the span.
-    pub name: &'static str,
-    #[cfg_attr(
-        feature = "json",
-        serde(rename = "nanos_total", serialize_with = "ser::nanos")
-    )]
-    /// The duration that the span was entered for.
-    pub duration_total: Duration,
-    #[cfg_attr(
-        feature = "json",
-        serde(rename = "nanos_nested", serialize_with = "ser::nanos")
-    )]
-    /// The duration that child spans of this span were entered for.
-    pub duration_nested: Duration,
-    /// Spans and events that occurred inside of this span.
-    pub children: Vec<Tree>,
 }
 
 pub(crate) struct TreeSpanOpened {
@@ -289,8 +482,8 @@ impl TreeSpanOpened {
             span: TreeSpan {
                 name: attrs.metadata().name(),
                 children: Vec::new(),
-                duration_nested: Duration::ZERO,
-                duration_total: Duration::ZERO,
+                inner_duration: Duration::ZERO,
+                total_duration: Duration::ZERO,
             },
             start: Instant::now(),
         }
@@ -301,7 +494,7 @@ impl TreeSpanOpened {
     }
 
     fn exit(&mut self) {
-        self.span.duration_total += self.start.elapsed();
+        self.span.total_duration += self.start.elapsed();
     }
 
     fn close(self) -> (TreeAttrs, TreeSpan) {
@@ -319,90 +512,14 @@ impl TreeSpanOpened {
     }
 
     fn log_span(&mut self, attrs: TreeAttrs, span: TreeSpan) {
-        self.span.duration_nested += span.duration_total;
+        self.span.inner_duration += span.total_duration;
         self.span.children.push(Tree::new(attrs, span));
     }
 
     cfg_uuid! {
         pub fn uuid(&self) -> Uuid {
-            self.attrs.uuid
+            self.attrs.uuid()
         }
-    }
-}
-
-impl<P: Processor> TreeLayer<P> {
-    fn parse_event(&self, event: &Event) -> (TreeAttrs, TreeEvent, bool) {
-        struct EventVisitor {
-            immediate: bool,
-            tag: Option<TagData>,
-            message: Cow<'static, str>,
-            fields: Fields,
-            tag_parser: TagParser,
-        }
-
-        impl EventVisitor {
-            fn new(tag_parser: TagParser) -> Self {
-                EventVisitor {
-                    immediate: false,
-                    tag: None,
-                    message: Cow::from("<no message>"),
-                    fields: Fields::new(),
-                    tag_parser,
-                }
-            }
-        }
-
-        impl Visit for EventVisitor {
-            fn record_bool(&mut self, field: &Field, value: bool) {
-                match field.name() {
-                    "immediate" => self.immediate = value,
-                    _ => self.record_debug(field, &value),
-                }
-            }
-
-            fn record_u64(&mut self, field: &Field, value: u64) {
-                match field.name() {
-                    TAG_KEY => {
-                        if self.tag.is_some() {
-                            fail::multiple_tags_on_event();
-                        }
-                        self.tag = Some((self.tag_parser)(value));
-                    }
-                    _ => self.record_debug(field, &value),
-                }
-            }
-
-            fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
-                let value = format!("{:?}", value);
-                match field.name() {
-                    // Only the first "message" is the message
-                    "message" if matches!(self.message, Cow::Borrowed(_)) => {
-                        self.message = Cow::from(value)
-                    }
-                    key => self.fields.push(KeyValue { key, value }),
-                }
-            }
-        }
-
-        let mut visitor = EventVisitor::new(self.tag_parser);
-
-        event.record(&mut visitor);
-
-        let tree_event = TreeEvent {
-            tag: visitor.tag,
-            message: visitor.message,
-            fields: visitor.fields,
-        };
-
-        let tree_attrs = TreeAttrs {
-            #[cfg(feature = "uuid")]
-            uuid: DEFAULT_EVENT_UUID,
-            #[cfg(feature = "chrono")]
-            timestamp: Utc::now(),
-            level: *event.metadata().level(),
-        };
-
-        (tree_attrs, tree_event, visitor.immediate)
     }
 }
 
@@ -431,16 +548,15 @@ where
         }
 
         match ctx.event_span(event) {
-            Some(parent) => {
-                parent
-                    .extensions_mut()
-                    .get_mut::<TreeSpanOpened>()
-                    .unwrap_or_else(fail::tree_span_opened_not_in_extensions)
-                    .log_event(tree_attrs, tree_event);
-            }
-            None => {
-                self.processor.process(Tree::new(tree_attrs, tree_event));
-            }
+            Some(parent) => parent
+                .extensions_mut()
+                .get_mut::<TreeSpanOpened>()
+                .unwrap_or_else(fail::tree_span_opened_not_in_extensions)
+                .log_event(tree_attrs, tree_event),
+            None => self
+                .processor
+                .process(Tree::new(tree_attrs, tree_event))
+                .unwrap_or_else(fail::processing_error),
         }
     }
 
@@ -477,7 +593,10 @@ where
                 .get_mut::<TreeSpanOpened>()
                 .unwrap_or_else(fail::tree_span_opened_not_in_extensions)
                 .log_span(tree_attrs, tree_span),
-            None => self.processor.process(Tree::new(tree_attrs, tree_span)),
+            None => self
+                .processor
+                .process(Tree::new(tree_attrs, tree_span))
+                .unwrap_or_else(fail::processing_error),
         }
     }
 }
