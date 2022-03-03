@@ -149,7 +149,7 @@ pub(crate) type MakeStdout = fn() -> std::io::Stdout;
 /// [nonblocking-processing]: crate::builder#nonblocking-log-processing-with-new
 pub fn new() -> LayerBuilder<TreeSender, Process<Printer<Pretty, MakeStdout>>> {
     let (sender_processor, receiver) = mpsc::unbounded_channel();
-    let receiver_processor = Process(Printer::new(Pretty::new(), std::io::stdout as _));
+    let receiver_processor = Process(Printer::default());
 
     LayerBuilder {
         sender_processor: TreeSender(sender_processor),
