@@ -1,13 +1,6 @@
-//! A [`Formatter`] that formats logs for pretty printing.
-//!
-//! See [`Pretty`] for more details.
-
-use crate::formatter::Formatter;
-use crate::layer::{KeyValue, Tree, TreeAttrs, TreeEvent, TreeKind, TreeSpan};
-use crate::tag::TagData;
-use std::fmt;
-use std::io::{self, Write};
-use tracing::Level;
+use crate::printer::StringifyTree;
+use crate::tree::{Event, Shared, Span, Tree};
+use std::fmt::{self, Write};
 
 /// Format logs for pretty printing.
 ///
@@ -33,92 +26,77 @@ use tracing::Level;
 /// WARN     │     ┕━ 🚧 [filter.warn]: Some filter warning lol
 /// TRACE    ┕━ 📍 [trace]: We finished!
 /// ```
-#[derive(Clone, Copy)]
-pub struct Pretty {
-    _priv: (),
-}
+#[derive(Debug)]
+pub struct Pretty;
 
-impl Pretty {
-    /// Create a new [`Pretty`] formatter.
-    ///
-    /// # Examples
-    /// ```
-    /// # use tracing_forest::formatter::Pretty;
-    /// # use tracing_forest::processor::{Printer, Processor};
-    /// let processor = Printer::new(Pretty::new(), std::io::stdout);
-    /// ```
-    pub const fn new() -> Self {
-        Pretty { _priv: () }
+impl StringifyTree for Pretty {
+    type Error = fmt::Error;
+
+    fn fmt(&self, tree: &Tree) -> Result<String, fmt::Error> {
+        let mut writer = String::with_capacity(256);
+
+        format_tree(tree, None, &mut Vec::with_capacity(16), &mut writer)?;
+
+        Ok(writer)
     }
 }
 
-impl Formatter for Pretty {
-    fn fmt(&self, tree: Tree, writer: &mut Vec<u8>) -> io::Result<()> {
-        let mut indent = Vec::with_capacity(0);
-
-        format_tree(&tree, None, &mut indent, writer)
-    }
-}
-
-#[derive(Copy, Clone)]
-enum Edge {
-    Null,
-    Line,
-    Fork,
-    Turn,
-}
-
-impl Edge {
-    fn repr(&self) -> &'static str {
-        match self {
-            Self::Null => "   ",
-            Self::Line => "│  ",
-            Self::Fork => "┝━ ",
-            Self::Turn => "┕━ ",
+fn format_tree(
+    tree: &Tree,
+    duration_root: Option<f64>,
+    indent: &mut Vec<Indent>,
+    writer: &mut String,
+) -> fmt::Result {
+    match tree {
+        Tree::Event(event) => {
+            format_shared(&event.shared, writer)?;
+            format_indent(indent, writer)?;
+            format_event(event, writer)
+        }
+        Tree::Span(span) => {
+            format_shared(&span.shared, writer)?;
+            format_indent(indent, writer)?;
+            format_span(span, duration_root, indent, writer)
         }
     }
 }
 
-fn format_attrs(attrs: &TreeAttrs, writer: &mut Vec<u8>) -> io::Result<()> {
+fn format_shared(shared: &Shared, writer: &mut String) -> fmt::Result {
     #[cfg(feature = "uuid")]
-    write!(writer, "{} ", attrs.uuid())?;
+    write!(writer, "{} ", shared.uuid)?;
 
     #[cfg(feature = "chrono")]
-    write!(writer, "{:<32} ", attrs.timestamp().to_rfc3339())?;
+    write!(writer, "{:<32} ", shared.timestamp.to_rfc3339())?;
 
-    write!(writer, "{:<8} ", attrs.level())
+    write!(writer, "{:<8} ", shared.level)
 }
 
-fn format_indent(indent: &mut Vec<Edge>, writer: &mut Vec<u8>) -> io::Result<()> {
-    indent
-        .iter()
-        .try_for_each(|edge| writer.write_all(edge.repr().as_bytes()))
+fn format_indent(indent: &mut Vec<Indent>, writer: &mut String) -> fmt::Result {
+    for indent in indent.iter() {
+        writer.write_str(indent.repr())?;
+    }
+    Ok(())
 }
 
-fn format_event(event: &TreeEvent, level: Level, writer: &mut Vec<u8>) -> io::Result<()> {
-    let tag = event.tag().unwrap_or_else(|| TagData::from(level));
+fn format_event(event: &Event, writer: &mut String) -> fmt::Result {
+    let tag = event.tag();
+    let message = event.message().unwrap_or("");
 
-    write!(
-        writer,
-        "{} [{}]: {}",
-        tag.icon,
-        tag.message,
-        event.message()
-    )?;
+    write!(writer, "{} [{}]: {}", tag.icon(), tag, message)?;
 
-    for KeyValue { key, value } in event.fields().iter() {
-        write!(writer, " | {}: {}", key, value)?;
+    for field in event.fields().iter() {
+        write!(writer, " | {}: {}", field.key(), field.value())?;
     }
 
     writeln!(writer)
 }
 
 fn format_span(
-    span: &TreeSpan,
+    span: &Span,
     duration_root: Option<f64>,
-    indent: &mut Vec<Edge>,
-    writer: &mut Vec<u8>,
-) -> io::Result<()> {
+    indent: &mut Vec<Indent>,
+    writer: &mut String,
+) -> fmt::Result {
     let duration_total = span.total_duration().as_nanos() as f64;
     let duration_nested = span.inner_duration().as_nanos() as u64;
     let root_duration = duration_root.unwrap_or(duration_total);
@@ -140,22 +118,22 @@ fn format_span(
 
     if let Some((last, remaining)) = span.children().split_last() {
         match indent.last_mut() {
-            Some(edge @ Edge::Turn) => *edge = Edge::Null,
-            Some(edge @ Edge::Fork) => *edge = Edge::Line,
+            Some(edge @ Indent::Turn) => *edge = Indent::Null,
+            Some(edge @ Indent::Fork) => *edge = Indent::Line,
             _ => {}
         }
 
-        indent.push(Edge::Fork);
+        indent.push(Indent::Fork);
 
         for tree in remaining {
             if let Some(edge) = indent.last_mut() {
-                *edge = Edge::Turn;
+                *edge = Indent::Fork;
             }
             format_tree(tree, Some(root_duration), indent, writer)?;
         }
 
         if let Some(edge) = indent.last_mut() {
-            *edge = Edge::Turn;
+            *edge = Indent::Turn;
         }
         format_tree(last, Some(root_duration), indent, writer)?;
 
@@ -165,19 +143,22 @@ fn format_span(
     Ok(())
 }
 
-fn format_tree(
-    tree: &Tree,
-    duration_root: Option<f64>,
-    indent: &mut Vec<Edge>,
-    writer: &mut Vec<u8>,
-) -> io::Result<()> {
-    format_attrs(&tree.attrs, writer)?;
+#[derive(Copy, Clone)]
+enum Indent {
+    Null,
+    Line,
+    Fork,
+    Turn,
+}
 
-    format_indent(indent, writer)?;
-
-    match &tree.kind {
-        TreeKind::Event(event) => format_event(event, tree.attrs.level(), writer),
-        TreeKind::Span(span) => format_span(span, duration_root, indent, writer),
+impl Indent {
+    fn repr(&self) -> &'static str {
+        match self {
+            Self::Null => "   ",
+            Self::Line => "│  ",
+            Self::Fork => "┝━ ",
+            Self::Turn => "┕━ ",
+        }
     }
 }
 

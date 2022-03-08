@@ -12,11 +12,11 @@ macro_rules! cfg_sync {
 
 #[doc(hidden)]
 #[macro_export]
-macro_rules! cfg_json {
+macro_rules! cfg_serde {
     ($($item:item)*) => {
         $(
-            #[cfg(feature = "json")]
-            #[cfg_attr(docsrs, doc(cfg(feature = "json")))]
+            #[cfg(feature = "serde")]
+            #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
             $item
         )*
     }

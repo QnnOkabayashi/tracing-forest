@@ -119,19 +119,21 @@
 //! [`with`]: SubscriberBuilder::with
 //! [`Filter`]: tracing_subscriber::layer::Filter
 //! [`on`]: SubscriberBuilder::on
-use crate::formatter::Pretty;
-use crate::layer::Tree;
-use crate::processor::{Printer, Processor, WithFallback};
+use crate::layer::ForestLayer;
+use crate::printer::{Printer, Pretty};
+use crate::tree::Tree;
+use crate::fail;
+use crate::tag::{GetTag, NoTag};
+use crate::processor::{Processor, WithFallback, ProcessReport};
 use crate::sealed::Sealed;
-use crate::tag::{NoTag, Tag, TagParser};
-use crate::{fail, TreeLayer};
-use tracing::Subscriber;
-use tracing_subscriber::layer::Layered;
-use tracing_subscriber::registry::LookupSpan;
-use tracing_subscriber::{Layer, Registry, EnvFilter};
 use std::future::Future;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::sync::oneshot;
+use tracing::Subscriber;
+use tracing_subscriber::layer::{Layer, Layered};
+use tracing_subscriber::registry::{LookupSpan, Registry};
+#[cfg(feature = "env-filter")]
+pub use tracing_subscriber::EnvFilter;
 
 pub(crate) type MakeStdout = fn() -> std::io::Stdout;
 
@@ -147,7 +149,7 @@ pub(crate) type MakeStdout = fn() -> std::io::Stdout;
 /// method.
 /// 
 /// [nonblocking-processing]: crate::builder#nonblocking-log-processing-with-new
-pub fn new() -> LayerBuilder<TreeSender, Process<Printer<Pretty, MakeStdout>>> {
+pub fn new() -> LayerBuilder<TreeSender, Process<Printer<Pretty, MakeStdout>>, NoTag> {
     let (sender_processor, receiver) = mpsc::unbounded_channel();
     let receiver_processor = Process(Printer::default());
 
@@ -155,8 +157,8 @@ pub fn new() -> LayerBuilder<TreeSender, Process<Printer<Pretty, MakeStdout>>> {
         sender_processor: TreeSender(sender_processor),
         receiver_processor,
         receiver,
-        tag: NoTag::from_field,
-        is_global: true,
+        tag: NoTag,
+        is_global: false,
     }
 }
 
@@ -172,14 +174,14 @@ pub fn new() -> LayerBuilder<TreeSender, Process<Printer<Pretty, MakeStdout>>> {
 /// method.
 /// 
 /// [inspecting-trace-data]: crate::builder#inspecting-trace-data-in-unit-tests-with-capture
-pub fn capture() -> LayerBuilder<TreeSender, Capture> {
+pub fn capture() -> LayerBuilder<TreeSender, Capture, NoTag> {
     let (sender_processor, receiver) = mpsc::unbounded_channel();
 
     LayerBuilder {
         sender_processor: TreeSender(sender_processor),
         receiver_processor: Capture(()),
         receiver,
-        tag: NoTag::from_field,
+        tag: NoTag,
         is_global: false,
     }
 }
@@ -188,11 +190,11 @@ pub fn capture() -> LayerBuilder<TreeSender, Capture> {
 /// Configures and constructs [`SubscriberBuilder`]s.
 ///
 /// This type is returned from [`new`] and [`capture`]. 
-pub struct LayerBuilder<T: Processor, R> {
-    sender_processor: T,
-    receiver_processor: R,
+pub struct LayerBuilder<Tx: Processor, Rx, T> {
+    sender_processor: Tx,
+    receiver_processor: Rx,
     receiver: UnboundedReceiver<Tree>,
-    tag: TagParser,
+    tag: T,
     is_global: bool,
 }
 
@@ -207,7 +209,7 @@ pub struct Process<P: Processor>(P);
 pub struct TreeSender(UnboundedSender<Tree>);
 
 impl Processor for TreeSender {
-    fn process(&self, tree: Tree) -> Result<(), crate::processor::ProcessingError> {
+    fn process(&self, tree: Tree) -> Result<(), ProcessReport> {
         self.0.process(tree)
     }
 }
@@ -221,10 +223,10 @@ impl SealedSender for TreeSender {}
 impl<S: SealedSender, P> Sealed for WithFallback<S, P> {}
 impl<S: SealedSender, P> SealedSender for WithFallback<S, P> {}
 
-impl<T, R> LayerBuilder<T, Process<R>>
+impl<Tx, Rx, T> LayerBuilder<Tx, Process<Rx>, T>
 where
-    T: Processor,
-    R: Processor,
+    Tx: Processor,
+    Rx: Processor,
 {
     /// Configure the processor on the receiving end of the log channel.
     /// This is particularly useful for adding fallbacks.
@@ -249,10 +251,10 @@ where
     ///     .await;
     /// # }
     /// ```
-    pub fn map_receiver<F, R2>(self, f: F) -> LayerBuilder<T, Process<R2>>
+    pub fn map_receiver<F, Rx2>(self, f: F) -> LayerBuilder<Tx, Process<Rx2>, T>
     where
-        F: FnOnce(R) -> R2,
-        R2: Processor,
+        F: FnOnce(Rx) -> Rx2,
+        Rx2: Processor,
     {
         LayerBuilder {
             sender_processor: self.sender_processor,
@@ -264,9 +266,10 @@ where
     }
 }
 
-impl<T, R> LayerBuilder<T, R>
+impl<Tx, Rx, T> LayerBuilder<Tx, Rx, T>
 where
-    T: Processor + SealedSender,
+    Tx: Processor + SealedSender,
+    T: GetTag,
 {
     /// Configure the processer within the subscriber that sends log trees to
     /// a processing task.
@@ -305,10 +308,10 @@ where
     ///     .await;
     /// # }
     /// ```
-    pub fn map_sender<F, T2>(self, f: F) -> LayerBuilder<T2, R>
+    pub fn map_sender<F, Tx2>(self, f: F) -> LayerBuilder<Tx2, Rx, T>
     where
-        F: FnOnce(T) -> T2,
-        T2: Processor + SealedSender,
+        F: FnOnce(Tx) -> Tx2,
+        Tx2: Processor + SealedSender,
     {
         LayerBuilder {
             sender_processor: f(self.sender_processor),
@@ -321,9 +324,14 @@ where
     }
 
     /// Set the tag parser.
-    pub fn set_tag(mut self, tag: TagParser) -> Self {
-        self.tag = tag;
-        self
+    pub fn set_tag<T2>(self, tag: T2) -> LayerBuilder<Tx, Rx, T2> {
+        LayerBuilder {
+            sender_processor: self.sender_processor,
+            receiver_processor: self.receiver_processor,
+            receiver: self.receiver,
+            tag,
+            is_global: self.is_global,
+        }
     }
 
     /// Set whether or not the subscriber should be set globally.
@@ -336,12 +344,11 @@ where
     pub fn on_subscriber<S>(
         self,
         subscriber: S,
-    ) -> SubscriberBuilder<Layered<TreeLayer<T>, S>, R>
+    ) -> SubscriberBuilder<Layered<ForestLayer<Tx, T>, S>, Rx>
     where
         S: Subscriber + for<'a> LookupSpan<'a>,
     {
-        let subscriber = TreeLayer::new(self.sender_processor)
-            .set_tag(self.tag)
+        let subscriber = ForestLayer::new_with_tag(self.sender_processor, self.tag)
             .with_subscriber(subscriber);
 
         SubscriberBuilder {
@@ -355,7 +362,7 @@ where
     /// Finish building the [`TreeLayer`], and compose it onto a [`Registry`].
     pub fn on_registry(
         self,
-    ) -> SubscriberBuilder<Layered<TreeLayer<T>, Registry>, R> {
+    ) -> SubscriberBuilder<Layered<ForestLayer<Tx, T>, Registry>, Rx> {
         self.on_subscriber(Registry::default())
     }
 }
@@ -403,6 +410,7 @@ where
     }
 
     /// Wraps the inner subscriber with the default [`EnvFilter`].
+    #[cfg(feature = "env-filter")]
     pub fn with_env_filter(self) -> SubscriberBuilder<Layered<EnvFilter, S>, O> {
         self.with(EnvFilter::from_default_env())
     }

@@ -27,7 +27,7 @@ async fn join_hanging_task() -> Result<(), Box<dyn std::error::Error>> {
     assert!(logs.len() == 1);
 
     let shutdown = logs[0].event()?;
-    assert!(shutdown.message() == "shutting down...");
+    assert!(shutdown.message() == Some("shutting down..."));
 
     Ok(())
 }

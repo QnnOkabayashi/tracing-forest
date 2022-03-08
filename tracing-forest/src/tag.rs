@@ -131,137 +131,117 @@
 //!     }
 //! }
 //! ```
-use crate::{cfg_derive, cfg_json, fail};
-use tracing::Level;
-
-/// A type that can tag events with custom messages.
-///
-/// # Safety
-///
-/// This trait is unsafe to implement as the method signatures are subject to
-/// change. Instead, [derive][tracing_forest_macros::Tag] it to ensure a correct
-/// implementation.
-///
-/// See [module level documentation][self] for how to use [`Tag`]s.
-pub unsafe trait Tag: 'static {
-    #[doc(hidden)]
-    fn as_field(&self) -> u64;
-
-    #[doc(hidden)]
-    fn from_field(value: u64) -> TagData;
-}
-
-pub(crate) type TagParser = fn(u64) -> TagData;
+use crate::cfg_serde;
+use std::fmt;
+pub use tracing::{Event, Level};
 
 /// The type that all tags resolve to once collected.
-#[derive(Debug, Clone, Copy)]
-pub struct TagData {
-    /// Minimalistic message denoting the tag kind.
-    pub message: &'static str,
-    /// Icon associated with the tag kind.
-    pub icon: char,
+#[derive(Debug, Clone)]
+pub struct Tag {
+    /// Optional prefix for the tag message
+    prefix: Option<&'static str>,
+
+    /// Level specifying the important of the log.
+    ///
+    /// This value isn't necessarily "trace", "debug", "info", "warn", or "error",
+    /// and can be customized.
+    level: &'static str,
+
+    /// An icon, typically emoji, that represents the tag.
+    icon: char,
 }
 
-impl From<Level> for TagData {
-    fn from(level: Level) -> Self {
+impl Tag {
+    pub const fn new_custom_level(
+        prefix: Option<&'static str>,
+        level: &'static str,
+        icon: char,
+    ) -> Self {
+        Tag {
+            prefix,
+            level,
+            icon,
+        }
+    }
+
+    pub const fn new(prefix: Option<&'static str>, level: Level) -> Self {
         match level {
-            Level::TRACE => TagData {
-                message: "trace",
-                icon: crate::private::TRACE_ICON,
-            },
-            Level::DEBUG => TagData {
-                message: "debug",
-                icon: crate::private::DEBUG_ICON,
-            },
-            Level::INFO => TagData {
-                message: "info",
-                icon: crate::private::INFO_ICON,
-            },
-            Level::WARN => TagData {
-                message: "warn",
-                icon: crate::private::WARN_ICON,
-            },
-            Level::ERROR => TagData {
-                message: "error",
-                icon: crate::private::ERROR_ICON,
-            },
+            Level::TRACE => Tag::new_custom_level(prefix, "trace", '📍'),
+            Level::DEBUG => Tag::new_custom_level(prefix, "debug", '🐛'),
+            Level::INFO => Tag::new_custom_level(prefix, "info", '💬'),
+            Level::WARN => Tag::new_custom_level(prefix, "warn", '🚧'),
+            Level::ERROR => Tag::new_custom_level(prefix, "error", '🚨'),
+        }
+    }
+
+    pub const fn new_level(level: Level) -> Self {
+        Tag::new(None, level)
+    }
+
+    pub const fn icon(&self) -> char {
+        self.icon
+    }
+}
+
+impl fmt::Display for Tag {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(prefix) = self.prefix {
+            write!(f, "{}.{}", prefix, self.level)
+        } else {
+            f.write_str(self.level)
         }
     }
 }
 
-cfg_json! {
+impl From<Level> for Tag {
+    fn from(level: Level) -> Self {
+        Tag::new_level(level)
+    }
+}
+
+impl PartialEq<str> for Tag {
+    fn eq(&self, other: &str) -> bool {
+        match self.prefix {
+            Some(prefix) => other
+                .strip_prefix(prefix)
+                .and_then(|s| s.strip_prefix('.'))
+                .map_or(false, |s| s == self.level),
+            None => other == self.level,
+        }
+    }
+}
+
+cfg_serde! {
     use serde::{Serialize, Serializer};
 
-    impl Serialize for TagData {
+    impl Serialize for Tag {
         fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-            serializer.serialize_str(self.message)
+            // This could probably go in a smart string
+            serializer.serialize_str(&format!("{}", self))
         }
     }
 }
 
-/// The absense of a [`Tag`].
-pub enum NoTag {}
+/// Parse a tag from a [`tracing::Event`]
+pub trait GetTag: 'static {
+    fn get_tag(&self, event: &Event) -> Option<Tag>;
+}
 
-unsafe impl Tag for NoTag {
-    fn as_field(&self) -> u64 {
-        match *self {}
-    }
+#[derive(Debug)]
+pub struct NoTag;
 
-    fn from_field(value: u64) -> TagData {
-        fail::tag_unset(value)
+impl GetTag for NoTag {
+    fn get_tag(&self, _event: &Event) -> Option<Tag> {
+        None
     }
 }
 
-cfg_derive! {
-    /// A macro for helping define [`Tag`]s.
-    ///
-    /// This macro **must** be invoked at the crate root, otherwise any generated
-    /// macros will fail to compile when called.
-    ///
-    /// This macro helps ensure macro hygiene when tag macros are automatically
-    /// generated. It expands to a module in the crate root that the macros can
-    /// reach to when retreiving type signatures.
-    ///
-    /// # Examples
-    ///
-    /// Wrapping derived [`Tag`] declarations:
-    /// ```
-    /// tracing_forest::declare_tags! {
-    ///     use tracing_forest::Tag;
-    ///
-    ///     #[derive(Tag)]
-    ///     pub(crate) enum HelloTag {
-    ///         #[tag(lvl = "info", msg = "hello", macro = "hello")]
-    ///         Hello,
-    ///     }
-    /// }
-    /// ```
-    /// Linking to another module:
-    /// ```ignore
-    /// // tags.rs
-    /// use tracing_forest::Tag;
-    ///
-    /// #[derive(Tag)]
-    /// pub enum HelloTag {
-    ///     #[tag(lvl = "info", msg = "hello", macro = "hello")]
-    ///     Hello,
-    /// }
-    ///
-    /// // lib.rs
-    /// tracing_forest::declare_tags! { path = "tags.rs" }
-    /// ```
-    #[macro_export]
-    macro_rules! declare_tags {
-        (path = $path:literal) => {
-            #[macro_use]
-            #[path = $path]
-            pub mod tracing_forest_tag;
-        };
-        ($( $decl:item )*) => {
-            #[macro_use]
-            pub mod tracing_forest_tag {
-                $( $decl )*
-            }
-        };
+impl<F> GetTag for F
+where
+    F: 'static + Fn(&Event) -> Option<Tag>,
+{
+    #[inline]
+    fn get_tag(&self, event: &Event) -> Option<Tag> {
+        (self)(event)
     }
 }

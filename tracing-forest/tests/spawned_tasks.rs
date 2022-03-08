@@ -19,13 +19,13 @@ async fn spawned_tasks() -> Result<(), Box<dyn std::error::Error>> {
     assert!(logs.len() == 3);
 
     let waiting = logs[0].event()?;
-    assert!(waiting.message() == "Waiting on signal");
+    assert!(waiting.message() == Some("Waiting on signal"));
 
     let test = logs[1].event()?;
-    assert!(test.message() == "Test message");
+    assert!(test.message() == Some("Test message"));
 
     let stopping = logs[2].event()?;
-    assert!(stopping.message() == "Stopping");
+    assert!(stopping.message() == Some("Stopping"));
 
     Ok(())
 }

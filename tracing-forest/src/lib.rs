@@ -284,47 +284,26 @@
 //! [attr_test]: tracing_forest_macros::test
 //! [attr_main]: tracing_forest_macros::main
 
-cfg_sync! {
-    pub mod builder;
-}
-pub mod formatter;
-pub mod layer;
+pub mod printer;
 pub mod processor;
 pub mod tag;
-#[doc(hidden)]
+pub mod tree;
 #[macro_use]
 mod cfg;
-#[doc(hidden)]
-#[cfg(feature = "json")]
-mod ser;
-cfg_uuid! {
-    mod uuid;
-
-    #[macro_use]
-    mod macros;
-}
 mod fail;
+mod layer;
 
-// Items that are required for macros but not intended for public API
-#[doc(hidden)]
-pub mod private {
-    #[cfg(feature = "uuid")]
-    pub use crate::uuid::into_u64_pair;
-    pub use tracing::subscriber::set_default;
-    pub use tracing_subscriber::{fmt::TestWriter, Layer, Registry};
-    pub const TRACE_ICON: char = '📍';
-    pub const DEBUG_ICON: char = '🐛';
-    pub const INFO_ICON: char = '💬';
-    pub const WARN_ICON: char = '🚧';
-    pub const ERROR_ICON: char = '🚨';
+pub use layer::ForestLayer;
+pub use printer::{printer, StringifyTree};
+pub use processor::Processor;
+
+cfg_sync! {
+    pub mod builder;
+    pub use builder::{capture, new};
 }
 
-pub use crate::builder::{capture, new};
-pub use crate::layer::TreeLayer;
-pub use crate::tag::Tag;
-
 cfg_uuid! {
-    pub use crate::uuid::id;
+    pub use layer::id;
 }
 
 cfg_attributes! {
