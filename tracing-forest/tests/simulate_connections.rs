@@ -1,11 +1,13 @@
 //! This test simulates processing many clients on multithreaded task, where
 //! each client has many `await` points.
-//! 
+//!
 //! It is intended to maximize the amount of concurrent operations to demonstrate
 //! that `tracing-forest` does, in fact, keep each one coherent.
 use rand::Rng;
 use tokio::time::{sleep, Duration};
 use tracing::{info, trace_span, Instrument};
+
+type Result<T> = core::result::Result<T, Box<dyn std::error::Error>>;
 
 async fn sleep_rand() {
     let millis = rand::thread_rng().gen_range(10..200);
@@ -13,12 +15,12 @@ async fn sleep_rand() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_two_tasks_random_sleeps() -> Result<(), Box<dyn std::error::Error>> {
+async fn test_n_tasks_random_sleeps() -> Result<()> {
     let num_clients = 10;
 
     let logs = tracing_forest::capture()
         .set_global(true)
-        .on_registry()
+        .build()
         .on(async {
             let mut clients = Vec::with_capacity(10);
             for client in 0..num_clients {
@@ -63,9 +65,7 @@ async fn test_two_tasks_random_sleeps() -> Result<(), Box<dyn std::error::Error>
         assert!(connection.name() == "connection");
         assert!(connection.children().len() == 3);
 
-        let mut children = connection.children().into_iter();
-
-        let client_connect = children.next().unwrap().event()?;
+        let client_connect = connection.children()[0].event()?;
         assert!(client_connect.message() == Some("new connection"));
         assert!(client_connect.fields().len() == 1);
 
@@ -73,7 +73,7 @@ async fn test_two_tasks_random_sleeps() -> Result<(), Box<dyn std::error::Error>
         assert!(field.key() == "client");
         let client_id = field.value();
 
-        for (child, action) in children.zip(["request", "response"]) {
+        for (child, action) in connection.children()[1..].iter().zip(["request", "response"]) {
             let span = child.span()?;
             assert!(span.name() == action);
             assert!(span.children().len() == 2);

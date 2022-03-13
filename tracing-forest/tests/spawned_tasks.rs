@@ -1,18 +1,25 @@
+//! This test simulates capturing trace data from different threads, and ensures
+//! that everything is still captured by the subscriber.
+//!
+//! Addresses https://github.com/QnnOkabayashi/tracing-forest/issues/3
 use tokio::time::{sleep, Duration};
+use tracing::info;
+
+type Result<T> = core::result::Result<T, Box<dyn std::error::Error>>;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn spawned_tasks() -> Result<(), Box<dyn std::error::Error>> {
+async fn spawned_tasks() -> Result<()> {
     let logs = tracing_forest::capture()
         .set_global(true)
-        .on_registry()
+        .build()
         .on(async {
-            tracing::error!("Waiting on signal");
+            info!("Waiting on signal");
             let handle = tokio::spawn(async {
-                tracing::error!("Test message");
+                info!("Test message");
             });
             sleep(Duration::from_millis(100)).await;
             handle.await.unwrap();
-            tracing::error!("Stopping");
+            info!("Stopping");
         })
         .await;
 
