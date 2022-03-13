@@ -1,5 +1,5 @@
 [workspace]
 members = [
     "tracing-forest",
-    "tracing-forest-macros"
+    # "tracing-forest-macros"
 ]

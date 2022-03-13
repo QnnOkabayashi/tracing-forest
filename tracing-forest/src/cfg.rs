@@ -1,10 +1,10 @@
 #[doc(hidden)]
 #[macro_export]
-macro_rules! cfg_sync {
+macro_rules! cfg_tokio {
     ($($item:item)*) => {
         $(
-            #[cfg(feature = "sync")]
-            #[cfg_attr(docsrs, doc(cfg(feature = "sync")))]
+            #[cfg(feature = "tokio")]
+            #[cfg_attr(docsrs, doc(cfg(feature = "tokio")))]
             $item
         )*
     }
@@ -41,30 +41,6 @@ macro_rules! cfg_chrono {
         $(
             #[cfg(feature = "chrono")]
             #[cfg_attr(docsrs, doc(cfg(feature = "chrono")))]
-            $item
-        )*
-    }
-}
-
-#[doc(hidden)]
-#[macro_export]
-macro_rules! cfg_derive {
-    ($($item:item)*) => {
-        $(
-            #[cfg(feature = "derive")]
-            #[cfg_attr(docsrs, doc(cfg(feature = "derive")))]
-            $item
-        )*
-    }
-}
-
-#[doc(hidden)]
-#[macro_export]
-macro_rules! cfg_attributes {
-    ($($item:item)*) => {
-        $(
-            #[cfg(feature = "attributes")]
-            #[cfg_attr(docsrs, doc(cfg(feature = "attributes")))]
             $item
         )*
     }
