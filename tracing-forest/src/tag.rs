@@ -1,142 +1,75 @@
-//! Trait for tagging events with custom messages and levels.
+//! Provide supplemental information to events.
 //!
-//! # Why use tags
+//! # Use cases for tags
 //!
-//! Using tags in your application can improve readability by distinguishing
+//! Using tags in trace data can improve readability by distinguishing
 //! between different kinds of trace data such as requests, internal state,
 //! or special operations. An error during a network request could mean a
 //! timeout occurred, while an error in the internal state could mean
 //! corruption. Both are errors, but one should be treated more seriously than
-//! the other, and therefore should be easily distinguishable.
+//! the other, and therefore the two should be easily distinguishable.
 //!
-//! # Custom macros for applications
+//! # Using tags
 //!
-//! The first step to using custom tags is to call [`tracing_forest::declare_tags!`]
-//! at the root level of your crate for macro hygiene purposes. Then define an
-//! `enum` type with variants for each possible log, and finally [deriving] the
-//! [`Tag`] trait. Ensure that the visibility is `pub(crate)` so any generated
-//! macros have access to it.
+//! This module provides the [`Tag`] type, which holds information required for
+//! formatting events, and the [`TagParser`] trait, which allows Tracing events to
+//! be parsed to return `Option<Tag>`.
 //!
-//! [`tracing_forest::declare_tags!`]: crate::declare_tags!
+//! ## Examples
+//! Declaring and using a custom `TagParser`.
 //! ```
-//! // lib.rs
-//! tracing_forest::declare_tags! {
-//!     use tracing_forest::Tag;
-//!    
-//!     #[derive(Tag)]
-//!     pub(crate) enum MyTag {
-//!         #[tag(lvl = "trace", msg = "simple")]
-//!         Simple,
-//!         #[tag(
-//!             lvl = "info",
-//!             msg = "all.features",
-//!             icon = '🔐',
-//!             macro = "all_features"
-//!         )]
-//!         AllFeatures,
+//! use tracing::{info, error, Event, Level};
+//! use tracing_forest::tag::Tag;
+//!
+//! // `TagParser` is implemented for all `Fn(&tracing::Event) -> Option<Tag>`,
+//! // so a top-level `fn` can be used.
+//! fn simple_tag(event: &Event) -> Option<Tag> {
+//!     // `target` is similar to a field, except has its own syntax and is a
+//!     // `&'static str`. It's intended to mark where the event occurs, making
+//!     // it ideal for storing tags.
+//!     let target = event.metadata().target();
+//!     let level = *event.metadata().level();
+//!
+//!     match target {
+//!         "security" if level == Level::ERROR => {
+//!             Some(Tag::new_custom_level(Some(target), "critical", '🔐'))
+//!         }
+//!         "admin" | "request" => Some(Tag::new(Some(target), level)),
+//!         _ => None,
 //!     }
 //! }
-//! ```
-//! In `enum` types, each variant must be a unit type, and have the `#[tag(..)]`
-//! attribute. Similarly, `struct` types must be unit types and have the
-//! `#[tag(..)]` attribute above their declaration.
-//! The attribute has four arguments that it takes:
-//! * `lvl`: The log level at which the log occurs at, like `"trace"` or
-//! `"warn"`. This is used to determine the default icon and the log level if
-//! a macro is derived.
-//! * `msg`: A minimalistic message displayed with the log.
-//! * `icon`: An optional character displayed during pretty formatting. Defaults
-//! do the icon associated with the level.
-//! * `macro`: An optional identifier used to declare a macro that can write
-//! logs with the specified tag kind. If not provided, then no macro is
-//! generated.
 //!
-//! If you generate macros, then they can be used throughout your application
-//! ```
-//! # tracing_forest::declare_tags! {
-//! #   use tracing_forest::Tag;
-//! #
-//! #   #[derive(Tag)]
-//! #   pub(crate) enum MyTag {
-//! #       #[tag(lvl = "trace", msg = "simple")]
-//! #       Simple,
-//! #       #[tag(
-//! #           lvl = "info",
-//! #           msg = "all.features",
-//! #           icon = '🔐',
-//! #           macro = "all_features"
-//! #       )]
-//! #       AllFeatures,
-//! #   }
-//! # }
-//! #[tracing_forest::main(tag = "MyTag")]
-//! fn main() {
-//!     use tracing_forest::Tag;
-//!     tracing::trace!(__event_tag = crate::tracing_forest_tag::MyTag::Simple.as_field(), "a simple log");
-//!     all_features!("all the features wow");
+//! #[tokio::main]
+//! async fn main() {
+//!     tracing_forest::worker_task()
+//!         .set_tag(simple_tag)
+//!         .build()
+//!         .on(async {
+//!             // Since `my_tag` reads from the `target`, we use the target.
+//!             // If it parsed the event differently, we would reflect that here.
+//!             info!(target: "admin", "some info for the admin");
+//!             error!(target: "request", "the request timed out");
+//!             error!(target: "security", "the db has been breached");
+//!             info!("no tags here");
+//!         })
+//!         .await;
 //! }
 //! ```
 //! ```log
-//! TRACE    📍 [simple]: a simple log
-//! INFO     🔐 [all.features]: all the features wow
+//! INFO     💬 [admin.info]: some info for the admin
+//! ERROR    🚨 [request.error]: the request timed out
+//! ERROR    🔐 [security.critical]: the db has been breached
+//! INFO     💬 [info]: no tags here
 //! ```
 //!
-//! Tagging works by passing in a field-value pair to [`tracing`]s log macros
-//! with the field name `__event_tag`, meaning that this is a reserved name that
-//! must not be used for other values, and may panic otherwise.
-//!
-//! ## Note:
-//!
-//! Although the [`Tag`] trait is unsafe to implement, it is guaranteed that
-//! `Tag::as_field` will retain the same name and input parameter `&self`.
-//!
-//! [deriving]: tracing_forest_macros::Tag
-//!
-//! # Example
-//!
-//! ```
-//! tracing_forest::declare_tags! {
-//!     use tracing_forest::Tag;
-//!
-//!     #[derive(Tag)]
-//!     pub(crate) enum KanidmTag {
-//!         #[tag(lvl = "info", msg = "admin.info", macro = "admin_info")]
-//!         AdminInfo,
-//!         #[tag(lvl = "warn", msg = "admin.warn", macro = "admin_warn")]
-//!         AdminWarn,
-//!         #[tag(lvl = "error", msg = "admin.error", macro = "admin_error")]
-//!         AdminError,
-//!         #[tag(lvl = "trace", msg = "request.trace", macro = "request_trace")]
-//!         RequestTrace,
-//!         #[tag(lvl = "info", msg = "request.info", macro = "request_info")]
-//!         RequestInfo,
-//!         #[tag(lvl = "warn", msg = "request.warn", macro = "request_warn")]
-//!         RequestWarn,
-//!         #[tag(lvl = "error", msg = "request.error", macro = "request_error")]
-//!         RequestError,
-//!         #[tag(lvl = "trace", msg = "security.access", icon = '🔓', macro = "security_access")]
-//!         SecurityAccess,
-//!         #[tag(lvl = "info", msg = "security.info", icon = '🔒', macro = "security_info")]
-//!         SecurityInfo,
-//!         #[tag(lvl = "error", msg = "security.critical", icon = '🔐', macro = "security_critical")]
-//!         SecurityCritical,
-//!         #[tag(lvl = "trace", msg = "filter.trace", macro = "filter_trace")]
-//!         FilterTrace,
-//!         #[tag(lvl = "info", msg = "filter.info", macro = "filter_info")]
-//!         FilterInfo,
-//!         #[tag(lvl = "warn", msg = "filter.warn", macro = "filter_warn")]
-//!         FilterWarn,
-//!         #[tag(lvl = "error", msg = "filter.error", macro = "filter_error")]
-//!         FilterError,
-//!     }
-//! }
-//! ```
 use crate::cfg_serde;
 use std::fmt;
-pub use tracing::{Event, Level};
+use tracing::{Event, Level};
 
-/// The type that all tags resolve to once collected.
-#[derive(Debug, Clone)]
+/// A type containing categorical information about where an event occurred.
+///
+/// See the [module-level documentation](crate::tag) for more details.
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Tag {
     /// Optional prefix for the tag message
     prefix: Option<&'static str>,
@@ -152,6 +85,8 @@ pub struct Tag {
 }
 
 impl Tag {
+    /// Returns a `Tag` constructed from an optional prefix and a custom level
+    /// and icon.
     pub const fn new_custom_level(
         prefix: Option<&'static str>,
         level: &'static str,
@@ -164,6 +99,7 @@ impl Tag {
         }
     }
 
+    /// Returns a `Tag` constructed from an optional prefix and a level.
     pub const fn new(prefix: Option<&'static str>, level: Level) -> Self {
         match level {
             Level::TRACE => Tag::new_custom_level(prefix, "trace", '📍'),
@@ -174,10 +110,12 @@ impl Tag {
         }
     }
 
+    /// Returns a `Tag` constructed from a `Level` and no prefix.
     pub const fn new_level(level: Level) -> Self {
         Tag::new(None, level)
     }
 
+    /// Returns the `Tag`'s icon for printing.
     pub const fn icon(&self) -> char {
         self.icon
     }
@@ -222,26 +160,34 @@ cfg_serde! {
     }
 }
 
-/// Parse a tag from a [`tracing::Event`]
-pub trait GetTag: 'static {
-    fn get_tag(&self, event: &Event) -> Option<Tag>;
+/// A type that can parse [`Tag`]s from Tracing events.
+///
+/// This trait is blanket-implemented for all `Fn(&tracing::Event) -> Option<Tag>`,
+/// so top-level `fn`s can be used.
+///
+/// See the [module-level documentation](crate::tag) for more details.
+pub trait TagParser: 'static {
+    /// Parse a tag from a [`tracing::Event`]
+    fn try_parse(&self, event: &Event) -> Option<Tag>;
 }
 
-#[derive(Debug)]
+/// A `TagParser` that always returns `None`.
+#[derive(Clone, Debug)]
 pub struct NoTag;
 
-impl GetTag for NoTag {
-    fn get_tag(&self, _event: &Event) -> Option<Tag> {
+impl TagParser for NoTag {
+    #[inline]
+    fn try_parse(&self, _event: &Event) -> Option<Tag> {
         None
     }
 }
 
-impl<F> GetTag for F
+impl<F> TagParser for F
 where
     F: 'static + Fn(&Event) -> Option<Tag>,
 {
     #[inline]
-    fn get_tag(&self, event: &Event) -> Option<Tag> {
-        (self)(event)
+    fn try_parse(&self, event: &Event) -> Option<Tag> {
+        self(event)
     }
 }
