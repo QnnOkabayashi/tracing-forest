@@ -1,7 +1,8 @@
+use crate::fail;
+use crate::printer::{Pretty, Printer};
 use crate::processor::Processor;
-use crate::tag::{GetTag, NoTag, Tag};
+use crate::tag::{NoTag, Tag, TagParser};
 use crate::tree::{self, FieldSet, Tree};
-use crate::{cfg_uuid, fail};
 #[cfg(feature = "chrono")]
 use chrono::Utc;
 use std::fmt;
@@ -10,14 +11,13 @@ use std::time::{Duration, Instant};
 use tracing::field::{Field, Visit};
 use tracing::span::{Attributes, Id};
 use tracing::{Event, Subscriber};
-use tracing_subscriber::layer::{Context, Layer};
-use tracing_subscriber::registry::{LookupSpan, SpanRef};
-
-cfg_uuid! {
-    use uuid::Uuid;
-    mod id;
-    pub use id::id;
-}
+use tracing_subscriber::layer::{Context, Layer, SubscriberExt};
+use tracing_subscriber::registry::{LookupSpan, Registry, SpanRef};
+use tracing_subscriber::util::SubscriberInitExt;
+#[cfg(feature = "uuid")]
+use uuid::Uuid;
+#[cfg(feature = "uuid")]
+pub(crate) mod id;
 
 pub(crate) struct OpenedSpan {
     span: tree::Span,
@@ -25,7 +25,7 @@ pub(crate) struct OpenedSpan {
 }
 
 impl OpenedSpan {
-    fn open<S>(attrs: &Attributes, ctx: &Context<S>) -> Self
+    fn new<S>(attrs: &Attributes, ctx: &Context<S>) -> Self
     where
         S: Subscriber + for<'a> LookupSpan<'a>,
     {
@@ -38,12 +38,11 @@ impl OpenedSpan {
                     #[cfg(feature = "smallvec")]
                     let mut buf = smallvec::SmallVec::<[u8; 64]>::new();
                     #[cfg(not(feature = "smallvec"))]
-                    let mut buf = Vec::with_capacity(45);
+                    let mut buf = Vec::with_capacity(64);
 
                     if let Ok(()) = write!(buf, "{:?}", value) {
                         if let Ok(parsed) = id::try_parse(&buf[..]) {
                             maybe_uuid = Some(parsed);
-                            return;
                         }
                     }
                 }
@@ -113,40 +112,50 @@ impl OpenedSpan {
         self.span.children.push(Tree::Span(span))
     }
 
-    cfg_uuid! {
-        pub(crate) fn uuid(&self) -> Uuid {
-            self.span.uuid()
-        }
+    #[cfg(feature = "uuid")]
+    pub(crate) fn uuid(&self) -> Uuid {
+        self.span.uuid()
     }
 }
 
+/// A [`Layer`] that collects and processes trace data while preserving
+/// contextual coherence.
 #[derive(Clone, Debug)]
 pub struct ForestLayer<P, T> {
     processor: P,
     tag: T,
 }
 
-impl<P: Processor> ForestLayer<P, NoTag> {
-    pub fn new(processor: P) -> Self {
-        ForestLayer::new_with_tag(processor, NoTag)
+impl<P: Processor, T: TagParser> ForestLayer<P, T> {
+    pub fn new(processor: P, tag: T) -> Self {
+        ForestLayer { processor, tag }
     }
 }
 
-impl<P: Processor, T: GetTag> ForestLayer<P, T> {
-    pub fn new_with_tag(processor: P, tag: T) -> Self {
-        ForestLayer { processor, tag }
+impl<P: Processor> From<P> for ForestLayer<P, NoTag> {
+    fn from(processor: P) -> Self {
+        ForestLayer::new(processor, NoTag)
+    }
+}
+
+impl Default for ForestLayer<Printer<Pretty, fn() -> io::Stdout>, NoTag> {
+    fn default() -> Self {
+        ForestLayer {
+            processor: Printer::default(),
+            tag: NoTag,
+        }
     }
 }
 
 impl<P, T, S> Layer<S> for ForestLayer<P, T>
 where
     P: Processor,
-    T: GetTag,
+    T: TagParser,
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
     fn on_new_span(&self, attrs: &Attributes, id: &Id, ctx: Context<S>) {
         let span = ctx.span(id).unwrap_or_else(fail::span_not_in_ctx);
-        let opened = OpenedSpan::open(attrs, &ctx);
+        let opened = OpenedSpan::new(attrs, &ctx);
 
         let mut extensions = span.extensions_mut();
         extensions.insert(opened);
@@ -156,13 +165,13 @@ where
         struct Visitor {
             message: Option<String>,
             fields: FieldSet,
-            urgent: bool,
+            immediate: bool,
         }
 
         impl Visit for Visitor {
             fn record_bool(&mut self, field: &Field, value: bool) {
                 match field.name() {
-                    "urgent" => self.urgent |= value,
+                    "immediate" => self.immediate |= value,
                     _ => self.record_debug(field, &value),
                 }
             }
@@ -179,13 +188,16 @@ where
         let mut visitor = Visitor {
             message: None,
             fields: FieldSet::default(),
-            urgent: false,
+            immediate: false,
         };
 
         event.record(&mut visitor);
 
         let level = *event.metadata().level();
-        let tag = self.tag.get_tag(event).unwrap_or_else(|| Tag::from(level));
+        let tag = self
+            .tag
+            .try_parse(event)
+            .unwrap_or_else(|| Tag::from(level));
 
         let current_span = ctx.event_span(event);
 
@@ -202,8 +214,8 @@ where
             fields: visitor.fields,
         };
 
-        if visitor.urgent {
-            write_urgent(&event, current_span.as_ref()).expect("writing urgent failed");
+        if visitor.immediate {
+            write_immediate(&event, current_span.as_ref()).expect("writing urgent failed");
         }
 
         match current_span.as_ref() {
@@ -260,7 +272,7 @@ where
     }
 }
 
-fn write_urgent<S>(event: &tree::Event, current: Option<&SpanRef<S>>) -> io::Result<()>
+fn write_immediate<S>(event: &tree::Event, current: Option<&SpanRef<S>>) -> io::Result<()>
 where
     S: for<'a> LookupSpan<'a>,
 {
@@ -269,10 +281,6 @@ where
     let mut writer = smallvec::SmallVec::<[u8; 256]>::new();
     #[cfg(not(feature = "smallvec"))]
     let mut writer = Vec::with_capacity(256);
-
-    let tag = Tag::from(event.level());
-
-    write!(writer, "{icon} URGENT {icon} ", icon = tag.icon())?;
 
     #[cfg(feature = "uuid")]
     if let Some(span) = current {
@@ -289,6 +297,10 @@ where
     write!(writer, "{} ", event.timestamp().to_rfc3339())?;
 
     write!(writer, "{:<8} ", event.level())?;
+
+    let tag = Tag::from(event.level());
+
+    write!(writer, "{icon} IMMEDIATE {icon} ", icon = tag.icon())?;
 
     if let Some(span) = current {
         for ancestor in span.scope().from_root() {
@@ -309,4 +321,33 @@ where
     writeln!(writer)?;
 
     io::stderr().write_all(&writer)
+}
+
+/// Initializes a global subscriber with a [`ForestLayer`] using the default configuration.
+///
+/// This function is intended for quick initialization. For more configuration
+/// options, configure a `Subscriber` manually using a `ForestLayer`, or use the
+/// [`worker_task`] function.
+///
+/// [`worker_task`]: crate::builder::worker_task
+///
+/// # Examples
+/// ```
+/// use tracing::{info, info_span};
+///
+/// tracing_forest::init();
+///
+/// info!("Hello, world!");
+/// info_span!("my_span").in_scope(|| {
+///     info!("Relevant information");
+/// });
+/// ```
+/// Produces the the output:
+/// ```log
+/// INFO     💬 [info]: Hello, world!
+/// INFO     my_span [ 26.0µs | 100.000% ]
+/// INFO     ┕━ 💬 [info]: Relevant information
+/// ```
+pub fn init() {
+    Registry::default().with(ForestLayer::default()).init();
 }

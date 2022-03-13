@@ -1,8 +1,8 @@
 //! Trait for processing logs of a span after it is closed.
 //!
 //! See [`Processor`] for more details.
-use crate::cfg_sync;
-use crate::printer::{Pretty, Printer};
+use crate::cfg_tokio;
+use crate::printer::{Printer, StderrPrinter, StdoutPrinter};
 use crate::tree::Tree;
 use std::io;
 use std::sync::mpsc::{Sender, SyncSender};
@@ -17,10 +17,10 @@ use error::SendError;
 /// `Processor`s are responsible for both formatting and writing logs to their
 /// intended destinations. This is typically implemented using
 ///
-/// [`StringifyTree`], [`MakeWriter`], and [`io::Write`].
+/// [`Formatter`], [`MakeWriter`], and [`io::Write`].
 ///
 /// [trace trees]: crate::tree::Tree
-/// [`StringifyTree`]: crate::printer::StringifyTree
+/// [`Formatter`]: crate::printer::Formatter
 /// [`MakeWriter`]: tracing_subscriber::fmt::MakeWriter
 pub trait Processor: 'static + Sized {
     /// Processes the [`Tree`] of logs. This can mean many things, such as writing
@@ -42,15 +42,15 @@ pub trait Processor: 'static + Sized {
 
     /// Returns a `Processor` that first attempts processing with `self`, and
     /// resorts to pretty-printing to stdout on failure.
-    fn with_stdout_fallback(self) -> WithFallback<Self, Printer<Pretty, fn() -> io::Stdout>> {
-        let fallback = Printer::new(Pretty, io::stdout as _);
+    fn with_stdout_fallback(self) -> WithFallback<Self, StdoutPrinter> {
+        let fallback = Printer::from_make_writer(io::stdout as _);
         self.with_fallback(fallback)
     }
 
     /// Returns a `Processor` that first attempts processing with `self`, and
     /// resorts to pretty-printing to stderr on failure.
-    fn with_stderr_fallback(self) -> WithFallback<Self, Printer<Pretty, fn() -> io::Stderr>> {
-        let fallback = Printer::new(Pretty, io::stderr as _);
+    fn with_stderr_fallback(self) -> WithFallback<Self, StderrPrinter> {
+        let fallback = Printer::from_make_writer(io::stderr as _);
         self.with_fallback(fallback)
     }
 
@@ -63,6 +63,7 @@ pub trait Processor: 'static + Sized {
 /// A [`Processor`] processor composed of a primary and a fallback `Processor`.
 ///
 /// This type is returned by [`Processor::with_fallback`].
+#[derive(Debug)]
 pub struct WithFallback<P, F> {
     primary: P,
     fallback: F,
@@ -83,6 +84,7 @@ where
 /// A [`Processor`] that ignores any incoming logs.
 ///
 /// This processor cannot fail.
+#[derive(Debug)]
 pub struct NoProcessor;
 
 impl Processor for NoProcessor {
@@ -117,7 +119,7 @@ impl Processor for SyncSender<Tree> {
     }
 }
 
-cfg_sync! {
+cfg_tokio! {
     use tokio::sync::mpsc::UnboundedSender;
 
     impl Processor for UnboundedSender<Tree> {

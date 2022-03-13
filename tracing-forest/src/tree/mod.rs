@@ -1,5 +1,8 @@
-//! Types relating to the core tree structure of `tracing-forest`.
+//! This module defines the core tree structure of `tracing-forest`, and provides
+//! methods used for log inspection when using [`capture`]. It consists of three
+//! types: [`Tree`], [`Span`], and [`Event`].
 //!
+//! [`capture`]: crate::builder::capture
 use crate::tag::Tag;
 use crate::{cfg_chrono, cfg_uuid};
 #[cfg(feature = "chrono")]
@@ -14,15 +17,20 @@ use uuid::Uuid;
 mod ser;
 
 mod error;
-use error::{ExpectedEventError, ExpectedSpanError};
+pub(crate) use error::{ExpectedEventError, ExpectedSpanError};
 
 mod field;
 pub use field::Field;
 pub(crate) use field::FieldSet;
 
-/// The core tree structure of `tracing-forest`.
+/// A node in the log tree, consisting of either a [`Span`] or an [`Event`].
 ///
+/// The inner types can be extracted through a `match` statement. Alternatively,
+/// the [`event`] and [`span`] methods provide a more ergonomic way to access the
+/// inner types.
 ///
+/// [`event`]: Tree::event
+/// [`span`]: Tree::span
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum Tree {
@@ -30,6 +38,7 @@ pub enum Tree {
     Span(Span),
 }
 
+/// A leaf node in the log tree carrying information about a Tracing event.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Event {
@@ -47,6 +56,7 @@ pub struct Event {
     pub(crate) fields: FieldSet,
 }
 
+/// An internal node in the log tree carrying information about a Tracing span.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Span {
@@ -92,28 +102,31 @@ pub(crate) struct Shared {
 }
 
 impl Tree {
-    /// Returns the inner [`Event`] if the tree is an event.
+    /// Returns a reference to the inner [`Event`] if the tree is an event.
     ///
     /// # Examples
     ///
     /// Inspecting a `Tree` returned from [`capture`]:
     /// ```
-    /// # use tracing::{info, info_span};
-    /// # #[tokio::main(flavor = "current_thread")]
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let logs = tracing_forest::capture()
-    ///     .on_registry()
-    ///     .on(async {
-    ///         info!("inside the span");
-    ///     })
-    ///     .await;
+    /// use tracing::{info, info_span};
+    /// use tracing_forest::tree::{Tree, Event};
     ///
-    /// assert!(logs.len() == 1);
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let logs: Vec<Tree> = tracing_forest::capture()
+    ///         .build()
+    ///         .on(async {
+    ///             info!("some information");
+    ///         })
+    ///         .await;
     ///
-    /// let event = logs[0].event()?;
-    /// assert!(my_span.message() == Some("inside the span"));
-    /// # Ok(())
-    /// # }
+    ///     assert!(logs.len() == 1);
+    ///
+    ///     let event: &Event = logs[0].event()?;
+    ///     assert!(event.message() == Some("some information"));
+    ///
+    ///     Ok(())
+    /// }
     /// ```
     ///
     /// [`capture`]: crate::builder::capture
@@ -124,30 +137,32 @@ impl Tree {
         }
     }
 
-    /// Returns the inner [`Span`] if the tree is a span.
+    /// Returns a reference to the inner [`Span`] if the tree is a span.
     ///
     /// # Examples
     ///
     /// Inspecting a `Tree` returned from [`capture`]:
     /// ```
-    /// # use tracing::{info, info_span};
-    /// # #[tokio::main(flavor = "current_thread")]
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let logs = tracing_forest::capture()
-    ///     .on_registry()
-    ///     .on(async {
-    ///         info_span!("my_span").in_scope(|| {
-    ///             info!("inside the span");
-    ///         });
-    ///     })
-    ///     .await;
+    /// use tracing::{info, info_span};
+    /// use tracing_forest::tree::{Tree, Span};
     ///
-    /// assert!(logs.len() == 1);
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let logs: Vec<Tree> = tracing_forest::capture()
+    ///         .build()
+    ///         .on(async {
+    ///             info_span!("my_span").in_scope(|| {
+    ///                 info!("inside the span");
+    ///             });
+    ///         })
+    ///         .await;
     ///
-    /// let my_span = logs[0].span()?;
-    /// assert!(my_span.name() == "my_span");
-    /// # Ok(())
-    /// # }
+    ///     assert!(logs.len() == 1);
+    ///
+    ///     let my_span: &Span = logs[0].span()?;
+    ///     assert!(my_span.name() == "my_span");
+    ///     Ok(())
+    /// }
     /// ```
     ///
     /// [`capture`]: crate::builder::capture
@@ -161,7 +176,7 @@ impl Tree {
 
 impl Event {
     cfg_uuid! {
-        /// Returns the events [`Uuid`].
+        /// Returns the event's [`Uuid`].
         pub fn uuid(&self) -> Uuid {
             self.shared.uuid
         }
@@ -174,17 +189,17 @@ impl Event {
         }
     }
 
-    /// Returns the events [`Level`].
+    /// Returns the event's [`Level`].
     pub fn level(&self) -> Level {
         self.shared.level
     }
 
-    /// Returns the events message.
+    /// Returns the event's message.
     pub fn message(&self) -> Option<&str> {
         self.message.as_deref()
     }
 
-    /// Returns the events [`Tag`].
+    /// Returns the event's [`Tag`].
     ///
     /// If no tag was provided during construction, the event will hold a default
     /// tag associated with its level.
@@ -192,7 +207,7 @@ impl Event {
         &self.tag
     }
 
-    /// Returns the events fields as an slice of key-value pairs.
+    /// Returns the event's fields.
     pub fn fields(&self) -> &[Field] {
         &self.fields
     }
@@ -200,7 +215,7 @@ impl Event {
 
 impl Span {
     cfg_uuid! {
-        /// Returns the spans [`Uuid`].
+        /// Returns the span's [`Uuid`].
         pub fn uuid(&self) -> Uuid {
             self.shared.uuid
         }
@@ -213,28 +228,36 @@ impl Span {
         }
     }
 
-    /// Returns the spans [`Level`].
+    /// Returns the span's [`Level`].
     pub fn level(&self) -> Level {
         self.shared.level
     }
 
-    /// Returns the events message.
+    /// Returns the span's name.
     pub fn name(&self) -> &str {
-        &self.name
+        self.name
     }
 
+    /// Returns the span's child trees.
     pub fn children(&self) -> &[Tree] {
         &self.children
     }
 
+    /// Returns the total duration the span was entered for.
+    ///
+    /// If the span was used to instrument a `Future`, this only accounts for the
+    /// time spent polling the `Future`. For example, time spent sleeping will
+    /// not be accounted for.
     pub fn total_duration(&self) -> Duration {
         self.total_duration
     }
 
+    /// Returns the duration that inner spans were opened for.
     pub fn inner_duration(&self) -> Duration {
         self.inner_duration
     }
 
+    /// Returns the duration this span was entered, but not in any child spans.
     pub fn base_duration(&self) -> Duration {
         self.total_duration - self.inner_duration
     }

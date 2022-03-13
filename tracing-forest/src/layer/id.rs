@@ -1,8 +1,8 @@
-use tracing::Subscriber;
-use tracing_subscriber::{Registry, registry::LookupSpan};
-use uuid::Uuid;
-use crate::layer::OpenedSpan;
 use crate::fail;
+use crate::layer::OpenedSpan;
+use tracing::Subscriber;
+use tracing_subscriber::{registry::LookupSpan, Registry};
+use uuid::Uuid;
 
 /// Gets the current [`Uuid`] of an entered span within a `tracing-forest`
 /// subscriber.
@@ -13,16 +13,13 @@ use crate::fail;
 /// ```
 /// # use tracing::{info, info_span};
 /// # use uuid::Uuid;
-/// # #[tokio::main]
-/// # async fn main() {
-/// # tracing_forest::new().on_registry().on(async {
+/// # tracing_forest::init();
 /// let uuid = Uuid::new_v4();
-/// 
+///
+/// // Tracings log syntax allows us to omit the redundent naming of the field here
 /// info_span!("my_span", %uuid).in_scope(|| {
 ///     assert!(tracing_forest::id() == uuid);
-/// })
-/// # }).await;
-/// # }
+/// });
 /// ```
 ///
 /// # Panics
@@ -64,10 +61,9 @@ pub(crate) const fn try_parse(input: &[u8]) -> Result<Uuid, ()> {
         // - `UUID` for a regular hyphenated UUID
         (36, s)
         | (38, [b'{', s @ .., b'}'])
-        | (
-            45,
-            [b'u', b'r', b'n', b':', b'u', b'u', b'i', b'd', b':', s @ ..],
-        ) => parse_hyphenated(s),
+        | (45, [b'u', b'r', b'n', b':', b'u', b'u', b'i', b'd', b':', s @ ..]) => {
+            parse_hyphenated(s)
+        }
         // Any other shaped input is immediately invalid
         _ => Err(()),
     }
@@ -188,4 +184,3 @@ const SHL4_TABLE: &[u8; 256] = &{
         i += 1;
     }
 };
-

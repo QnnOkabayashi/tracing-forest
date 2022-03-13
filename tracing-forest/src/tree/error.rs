@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::fmt;
 
 /// Error returned by [`Tree::event`][event].
@@ -12,18 +13,18 @@ pub struct ExpectedEventError(pub(super) ());
 #[derive(Debug)]
 pub struct ExpectedSpanError(pub(super) ());
 
-impl std::error::Error for ExpectedEventError {}
+impl Error for ExpectedEventError {}
 
-impl std::error::Error for ExpectedSpanError {}
+impl Error for ExpectedSpanError {}
 
 impl fmt::Display for ExpectedEventError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.pad("Expected an event, found a span")
+        "Expected an event, found a span".fmt(f)
     }
 }
 
 impl fmt::Display for ExpectedSpanError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.pad("Expected a span, found an event")
+        "Expected a span, found an event".fmt(f)
     }
 }

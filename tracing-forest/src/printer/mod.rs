@@ -1,3 +1,4 @@
+//! Utilities for formatting and writing trace trees.
 use crate::processor::{ProcessReport, Processor};
 use crate::tree::Tree;
 use std::error::Error;
@@ -7,22 +8,22 @@ use tracing_subscriber::fmt::MakeWriter;
 mod pretty;
 pub use pretty::Pretty;
 
-/// Write a [`Tree`] as a `String`.
+/// Format a [`Tree`] into a `String`.
 ///
 /// # Examples
 ///
 /// This trait implements all `Fn(&Tree) -> Result<String, E>` types, where `E: Debug`.
-/// If the `serde` feature is enabled, functions like [`serde_json::to_string_pretty`]
-/// can be used wherever a `StringifyTree` type is required.
+/// If the `serde` feature is enabled, functions like `serde_json::to_string_pretty`
+/// can be used wherever a `Formatter` is required.
 /// ```
+/// # use tracing::info;
 /// # #[tokio::main(flavor = "current_thread")]
 /// # async fn main() {
-/// tracing_forest::new()
-///     .map_receiver(|rx| {
-///         // `Printer::fmt` expects some `StringifyTree` type.
-///         rx.fmt(serde_json::to_string_pretty)
+/// tracing_forest::worker_task()
+///     .map_receiver(|receiver| {
+///         receiver.set_formatter(serde_json::to_string_pretty)
 ///     })
-///     .on_registry()
+///     .build()
 ///     .on(async {
 ///         info!("write this as json");
 ///     })
@@ -44,7 +45,7 @@ pub use pretty::Pretty;
 ///   }
 /// }
 /// ```
-pub trait StringifyTree {
+pub trait Formatter {
     /// The error type if the `Tree` cannot be stringified.
     type Error: Error + Send + Sync;
 
@@ -52,90 +53,102 @@ pub trait StringifyTree {
     fn fmt(&self, tree: &Tree) -> Result<String, Self::Error>;
 }
 
-impl<F, E> StringifyTree for F
+impl<F, E> Formatter for F
 where
     F: Fn(&Tree) -> Result<String, E>,
     E: Error + Send + Sync,
 {
     type Error = E;
 
-    #[inline(always)]
+    #[inline]
     fn fmt(&self, tree: &Tree) -> Result<String, E> {
         self(tree)
     }
 }
 
-/// Returns a [`Printer`] with the default configuration.
-pub fn printer() -> Printer<Pretty, fn() -> io::Stdout> {
-    Printer::new(Pretty, io::stdout)
-}
-
 /// A [`Processor`] that formats and writes logs.
 #[derive(Clone, Debug)]
 pub struct Printer<S, W> {
-    to_string: S,
+    formatter: S,
     make_writer: W,
 }
 
-impl<S, W> Printer<S, W>
+pub type StdoutPrinter = Printer<Pretty, fn() -> io::Stdout>;
+
+pub type StderrPrinter = Printer<Pretty, fn() -> io::Stderr>;
+
+impl<F, W> Printer<F, W>
 where
-    S: 'static + StringifyTree,
+    F: 'static + Formatter,
     W: 'static + for<'a> MakeWriter<'a>,
 {
     /// Returns a new [`Printer`].
-    pub fn new(to_string: S, make_writer: W) -> Self {
+    pub fn new(formatter: F, make_writer: W) -> Self {
         Printer {
-            to_string,
+            formatter,
             make_writer,
         }
     }
 
     /// Set the formatter.
-    pub fn fmt<S2>(self, to_string: S2) -> Printer<S2, W>
+    pub fn set_formatter<F2>(self, formatter: F2) -> Printer<F2, W>
     where
-        S2: 'static + StringifyTree,
+        F2: 'static + Formatter,
     {
-        Printer::new(to_string, self.make_writer)
+        Printer::new(formatter, self.make_writer)
     }
 
     /// Set the writer.
-    pub fn write<W2>(self, make_writer: W2) -> Printer<S, W2>
+    pub fn set_writer<W2>(self, make_writer: W2) -> Printer<F, W2>
     where
         W2: 'static + for<'a> MakeWriter<'a>,
     {
-        Printer::new(self.to_string, make_writer)
+        Printer::new(self.formatter, make_writer)
+    }
+}
+
+impl<F> Printer<F, fn() -> io::Stdout>
+where
+    F: 'static + Formatter,
+{
+    /// Returns a new [`Printer`] from a [`Formatter`], defaulting to writing to
+    /// stdout.
+    pub fn from_formatter(formatter: F) -> Self {
+        Printer::new(formatter, io::stdout)
+    }
+}
+
+impl<W> Printer<Pretty, W>
+where
+    W: 'static + for<'a> MakeWriter<'a>,
+{
+    /// Returns a new [`Printer`] from a [`MakeWriter`], defaulting to pretty
+    /// printing.
+    pub fn from_make_writer(make_writer: W) -> Self {
+        Printer::new(Pretty::default(), make_writer)
     }
 }
 
 impl Default for Printer<Pretty, fn() -> io::Stdout> {
     fn default() -> Self {
-        printer()
+        Printer::new(Pretty::default(), io::stdout)
     }
 }
 
 impl<F, W> Processor for Printer<F, W>
 where
-    F: 'static + StringifyTree,
+    F: 'static + Formatter,
     W: 'static + for<'a> MakeWriter<'a>,
 {
     fn process(&self, tree: Tree) -> Result<(), ProcessReport> {
-        // Since both formatting and writing can error, we need to be able to
-        // generate a process report for each. Since both are recoverable, they
-        // should both return ownership to the payload. However, we can't have
-        // a `ProcessReport` for each because then two reports need ownership.
-        //
-        // It turns out we can avoid cloning by chaining results together and
-        // propagating errors to the very end so we only have to create one closure
-        // taking ownership of the tree.
-        self.to_string
-            .fmt(&tree)
-            .map_err(Into::into)
-            .and_then(|buf| {
-                self.make_writer
-                    .make_writer()
-                    .write_all(buf.as_bytes())
-                    .map_err(Into::into)
-            })
-            .map_err(|err| ProcessReport::new(Some(tree), err))
+        let buf = match self.formatter.fmt(&tree) {
+            Ok(buf) => buf,
+            Err(e) => return Err(ProcessReport::new(Some(tree), e.into())),
+        };
+
+        match self.make_writer.make_writer().write_all(buf.as_bytes()) {
+            Ok(()) => Ok(()),
+            Err(e) => Err(ProcessReport::new(Some(tree), e.into())),
+        }
     }
 }

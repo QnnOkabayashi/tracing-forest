@@ -33,7 +33,7 @@ impl ProcessReport {
 }
 
 impl fmt::Debug for ProcessReport {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // Seeing the whole tree is really unnecessary and unhelpful.
         // It would only make sense to show whether the payload were present.
         f.debug_struct("ProcessReport")
@@ -43,7 +43,7 @@ impl fmt::Debug for ProcessReport {
 }
 
 impl fmt::Display for ProcessReport {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.reason.fmt(f)
     }
 }
@@ -63,7 +63,7 @@ impl Error for ProcessReport {
 pub struct SendError;
 
 impl fmt::Display for SendError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         "Sending on a closed channel. This is likely caused by dangling Tokio tasks. If this is intentional, try adding a fallback with `Processor::with_fallback`.".fmt(f)
     }
 }
