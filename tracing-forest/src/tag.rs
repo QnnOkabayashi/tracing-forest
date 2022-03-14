@@ -56,10 +56,10 @@
 //! }
 //! ```
 //! ```log
-//! INFO     💬 [admin.info]: some info for the admin
+//! INFO     ＿ [admin.info]: some info for the admin
 //! ERROR    🚨 [request.error]: the request timed out
 //! ERROR    🔐 [security.critical]: the db has been breached
-//! INFO     💬 [info]: no tags here
+//! INFO     ＿ [info]: no tags here
 //! ```
 //!
 use crate::cfg_serde;
@@ -104,7 +104,7 @@ impl Tag {
         match level {
             Level::TRACE => Tag::new_custom_level(prefix, "trace", '📍'),
             Level::DEBUG => Tag::new_custom_level(prefix, "debug", '🐛'),
-            Level::INFO => Tag::new_custom_level(prefix, "info", '💬'),
+            Level::INFO => Tag::new_custom_level(prefix, "info", '＿'),
             Level::WARN => Tag::new_custom_level(prefix, "warn", '🚧'),
             Level::ERROR => Tag::new_custom_level(prefix, "error", '🚨'),
         }

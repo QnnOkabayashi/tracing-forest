@@ -344,9 +344,9 @@ where
 /// ```
 /// Produces the the output:
 /// ```log
-/// INFO     💬 [info]: Hello, world!
+/// INFO     ＿ [info]: Hello, world!
 /// INFO     my_span [ 26.0µs | 100.000% ]
-/// INFO     ┕━ 💬 [info]: Relevant information
+/// INFO     ┕━ ＿ [info]: Relevant information
 /// ```
 pub fn init() {
     Registry::default().with(ForestLayer::default()).init();

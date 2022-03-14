@@ -137,17 +137,17 @@
 //! that occurred in each concurrent branch.
 //! ```log
 //! INFO     conn [ 150µs | 100.00% ]
-//! INFO     ┝━ 💬 [info]: step 0 | id: 1
-//! INFO     ┝━ 💬 [info]: step 1 | id: 1
-//! INFO     ┕━ 💬 [info]: step 2 | id: 1
+//! INFO     ┝━ ＿ [info]: step 0 | id: 1
+//! INFO     ┝━ ＿ [info]: step 1 | id: 1
+//! INFO     ┕━ ＿ [info]: step 2 | id: 1
 //! INFO     conn [ 343µs | 100.00% ]
-//! INFO     ┝━ 💬 [info]: step 0 | id: 0
-//! INFO     ┝━ 💬 [info]: step 1 | id: 0
-//! INFO     ┕━ 💬 [info]: step 2 | id: 0
+//! INFO     ┝━ ＿ [info]: step 0 | id: 0
+//! INFO     ┝━ ＿ [info]: step 1 | id: 0
+//! INFO     ┕━ ＿ [info]: step 2 | id: 0
 //! INFO     conn [ 233µs | 100.00% ]
-//! INFO     ┝━ 💬 [info]: step 0 | id: 2
-//! INFO     ┝━ 💬 [info]: step 1 | id: 2
-//! INFO     ┕━ 💬 [info]: step 2 | id: 2
+//! INFO     ┝━ ＿ [info]: step 0 | id: 2
+//! INFO     ┝━ ＿ [info]: step 1 | id: 2
+//! INFO     ┕━ ＿ [info]: step 2 | id: 2
 //! ```
 //!
 //! [`tracing-tree`]: https://crates.io/crates/tracing-tree
@@ -158,14 +158,14 @@
 //!
 //! Without tags, it's difficult to distinguish where events are occurring in a system.
 //! ```log
-//! INFO     💬 [info]: some info for the admin
+//! INFO     ＿ [info]: some info for the admin
 //! ERROR    🚨 [error]: the request timed out
 //! ERROR    🚨 [error]: the db has been breached
 //! ```
 //!
 //! Tags help make this distinction more visible.
 //! ```log
-//! INFO     💬 [admin.info]: some info for the admin
+//! INFO     ＿ [admin.info]: some info for the admin
 //! ERROR    🚨 [request.error]: the request timed out
 //! ERROR    🔐 [security.critical]: the db has been breached
 //! ```
@@ -226,11 +226,11 @@
 //! });
 //! ```
 //! ```log
-//! INFO     💬 IMMEDIATE 💬 my_span > third, but immediately
+//! INFO     ＿ IMMEDIATE ＿ my_span > third, but immediately
 //! TRACE    my_span [ 125µs | 100.000% ]
-//! INFO     ┝━ 💬 [info]: first
-//! INFO     ┝━ 💬 [info]: second
-//! INFO     ┕━ 💬 [info]: third, but immediately
+//! INFO     ┝━ ＿ [info]: first
+//! INFO     ┝━ ＿ [info]: second
+//! INFO     ┕━ ＿ [info]: third, but immediately
 //! ```
 //!
 //! # Feature flags

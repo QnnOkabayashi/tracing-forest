@@ -30,16 +30,16 @@ use std::fmt::{self, Write};
 /// ```log
 /// INFO     try_from_entry_ro [ 7.47ms | 6.52% / 100.00% ]
 /// INFO     ┝━ server::internal_search [ 6.98ms | 31.88% / 93.47% ]
-/// INFO     │  ┝━ 💬 [filter.info]: Some filter info...
+/// INFO     │  ┝━ __ [filter.info]: Some filter info...
 /// INFO     │  ┝━ server::search [ 4.59ms | 0.81% / 61.41% ]
 /// INFO     │  │  ┝━ be::search [ 4.51ms | 0.40% / 60.31% ]
 /// INFO     │  │  │  ┕━ be::search -> filter2idl [ 4.48ms | 22.40% / 59.91% ]
 /// INFO     │  │  │     ┝━ be::idl_arc_sqlite::get_idl [ 571µs | 7.64% ]
-/// INFO     │  │  │     │  ┕━ 💬 [filter.info]: Some filter info...
+/// INFO     │  │  │     │  ┕━ ＿ [filter.info]: Some filter info...
 /// INFO     │  │  │     ┕━ be::idl_arc_sqlite::get_idl [ 2.23ms | 29.85% ]
 /// ERROR    │  │  │        ┝━ 🚨 [admin.error]: Oh no, an admin error occurred :(
 /// DEBUG    │  │  │        ┝━ 🐛 [debug]: An untagged debug log
-/// INFO     │  │  │        ┕━ 💬 [admin.info]: there's been a big mistake | alive: false | status: "very sad"
+/// INFO     │  │  │        ┕━ ＿ [admin.info]: there's been a big mistake | alive: false | status: "very sad"
 /// INFO     │  │  ┕━ be::idl_arc_sqlite::get_identry [ 21.4µs | 0.28% ]
 /// INFO     │  │     ┝━ 🔐 [security.critical]: A security critical log
 /// INFO     │  │     ┕━ 🔓 [security.access]: A security access log
