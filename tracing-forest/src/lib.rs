@@ -37,7 +37,7 @@
 //! ```toml
 //! tracing-forest = { version = "0.1", features = ["full"] }
 //! ```
-//! Then, add the [`tracing_forest::init`](crate::init) to your main function:
+//! Then, add [`tracing_forest::init`](crate::init) to your main function:
 //! ```
 //! # #[allow(clippy::needless_doctest_main)]
 //! fn main() {
