@@ -13,101 +13,134 @@ Preserve contextual coherence among trace data from concurrent tasks.
 # Overview
 
 [`tracing`] is a framework for instrumenting programs to collect structured
-and async-aware diagnostics. The [`tracing-subscriber`] crate provides tools for
-working with [`tracing`]. This crate extends [`tracing-subscriber`] by providing
-types capable of preserving contextual coherence of trace data from concurrent 
-tasks when logging.
+and async-aware diagnostics via the `Subscriber` trait. The
+[`tracing-subscriber`] crate provides tools for composing `Subscriber`s
+from smaller units. This crate extends [`tracing-subscriber`] by providing
+`ForestLayer`, a `Layer` that preserves contextual coherence of trace
+data from concurrent tasks when logging.
 
 This crate is intended for programs running many nontrivial and disjoint
-tasks concurrently, like server backends. Unlike other `Subscriber`s which
-simply keep track of the context of an event, `tracing-forest` preserves
-the contextual coherence when writing logs, allowing readers to easily trace
-a sequence of events from the same task.
+tasks concurrently, like server backends. Unlike other `Subscriber`s
+which simply keep track of the context of an event, `tracing-forest` preserves
+the contextual coherence when writing logs even in parallel contexts, allowing
+readers to easily trace a sequence of events from the same task.
 
-`tracing-forest` provides many tools for authoring applications, but can
-also be extended to author other libraries.
+`tracing-forest` is intended for authoring applications.
 
 [`tracing`]: https://crates.io/crates/tracing
 [`tracing-subscriber`]: https://crates.io/crates/tracing-subscriber
 
-## Getting started
+# Getting started
 
 The easiest way to get started is to enable all features. Do this by
 adding the following to your `Cargo.toml` file:
 ```toml
-tracing-forest = { version = "1", features = ["full"] }
+tracing-forest = { version = "0.1", features = ["full"] }
 ```
-Then, add the `#[tracing_forest::main]` attribute to your main function:
+Then, add `tracing_forest::init` to your main function:
 ```rust
-#[tracing_forest::main]
 fn main() {
-    // do stuff here...
-    tracing::trace!("Hello, world!");
+    tracing_forest::init();
+    // ...
 }
 ```
 
-## Contextual Coherence in action
+# Contextual coherence in action
 
-This example contains two counters, one for evens and another for odds.
-Running it will emit trace data at the root level, implying that all the
-events are _independent_, meaning each trace will be processed and written
-as it's collected. In this case, the logs will count up chronologically.
+Similar to this crate, the `tracing-tree` crate collects and writes trace
+data as a tree. Unlike this crate, it doesn't maintain contextual coherence
+in parallel contexts.
+
+Observe the below program, which simulates serving multiple clients concurrently.
 ```rust
-let evens = async {
-    for i in 0..3 {
-        tracing::info!("{}", i * 2);
-        // pause for `odds`
-        sleep(Duration::from_millis(100)).await;
-    }
-};
+use tracing::info;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry};
+use tracing_tree::HierarchicalLayer;
 
-let odds = async {
-    // pause for `evens`
-    sleep(Duration::from_millis(50)).await;
+#[tracing::instrument]
+async fn conn(id: u32) {
     for i in 0..3 {
-        tracing::info!("{}", i * 2 + 1);
-        // pause for `evens`
-        sleep(Duration::from_millis(100)).await;
+        some_expensive_operation().await;
+        info!(id, "step {}", i);
     }
-};
+}
 
-let _ = tokio::join!(evens, odds);
+#[tokio::main(flavor = "multi_thread")]
+async fn main() {
+    // Use a `tracing-tree` subscriber
+    Registry::default()
+        .with(HierarchicalLayer::default())
+        .init();
+
+    let mut connections = vec![];
+
+    for id in 0..3 {
+        let handle = tokio::spawn(conn(id));
+        connections.push(handle);
+    }
+
+    for conn in connections {
+        conn.await.unwrap();
+    }
+}
 ```
+With `tracing-tree`, the trace data is printed in chronological order, making
+it difficult to parse the sequence of events for each client.
 ```log
-INFO     💬 [info]: 0
-INFO     💬 [info]: 1
-INFO     💬 [info]: 2
-INFO     💬 [info]: 3
-INFO     💬 [info]: 4
-INFO     💬 [info]: 5
+conn id=2
+conn id=0
+conn id=1
+  23ms  INFO step 0, id=2
+  84ms  INFO step 0, id=1
+  94ms  INFO step 1, id=2
+  118ms  INFO step 0, id=0
+  130ms  INFO step 1, id=1
+  193ms  INFO step 2, id=2
+
+  217ms  INFO step 1, id=0
+  301ms  INFO step 2, id=1
+
+  326ms  INFO step 2, id=0
+
 ```
-Instrumenting the counters tells the `TreeLayer` in the current subscriber to 
-preserve the contextual coherence of trace data from each task. Traces from the 
-`even` counter will be grouped, and traces from the `odd` counter will be 
-grouped.
+We can instead use `tracing-forest` as a drop-in replacement for `tracing-tree`.
 ```rust
-let evens = async {
-    // ...
-}.instrument(tracing::trace_span!("counting_evens"));
+use tracing::info;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry};
+use tracing_forest::ForestLayer;
 
-let odds = async {
+#[tracing::instrument]
+async fn conn(id: u32) {
     // ...
-}.instrument(tracing::trace_span!("counting_odds"));
-    
-let _ = tokio::join!(evens, odds);
+}
+
+#[tokio::main(flavor = "multi_thread")]
+async fn main() {
+    // Use a `tracing-forest` subscriber
+    Registry::default()
+        .with(ForestLayer::default())
+        .init();
+
+    // ...
+}
 ```
+`tracing-forest` trades chronological ordering in favor of maintaining
+contextual coherence, providing a clearer view into the sequence of events
+that occurred in each concurrent branch.
 ```log
-TRACE    counting_evens [ 409µs | 100.000% ]
-INFO     ┕━ 💬 [info]: 0
-INFO     ┕━ 💬 [info]: 2
-INFO     ┕━ 💬 [info]: 4
-TRACE    counting_odds [ 320µs | 100.000% ]
-INFO     ┕━ 💬 [info]: 1
-INFO     ┕━ 💬 [info]: 3
-INFO     ┕━ 💬 [info]: 5
+INFO     conn [ 150µs | 100.00% ]
+INFO     ┝━ ＿ [info]: step 0 | id: 1
+INFO     ┝━ ＿ [info]: step 1 | id: 1
+INFO     ┕━ ＿ [info]: step 2 | id: 1
+INFO     conn [ 343µs | 100.00% ]
+INFO     ┝━ ＿ [info]: step 0 | id: 0
+INFO     ┝━ ＿ [info]: step 1 | id: 0
+INFO     ┕━ ＿ [info]: step 2 | id: 0
+INFO     conn [ 233µs | 100.00% ]
+INFO     ┝━ ＿ [info]: step 0 | id: 2
+INFO     ┝━ ＿ [info]: step 1 | id: 2
+INFO     ┕━ ＿ [info]: step 2 | id: 2
 ```
-Although the numbers were logged chronologically, they appear grouped in the 
-spans they originated from.
 
 ## License
 `tracing-forest` is open-source software, distributed under the MIT license.

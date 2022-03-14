@@ -1,32 +1,36 @@
-#[cfg(feature = "sync")]
-mod sync_tests {
-    use rand::Rng;
-    use tokio::time::{sleep, Duration};
-    use tracing::{info, trace_span, Instrument};
+type Result<T> = core::result::Result<T, Box<dyn std::error::Error>>;
 
-    async fn sleep_rand() {
-        sleep(Duration::from_millis(rand::thread_rng().gen_range(10..200))).await
+#[cfg(feature = "tokio")]
+mod tokio_tests {
+    use rand::Rng;
+    use std::future::Future;
+    use tokio::time::{sleep, Duration};
+    use tracing::{info, trace, trace_span, Instrument};
+
+    fn do_work() -> impl Future {
+        let millis = rand::thread_rng().gen_range(0..200);
+        sleep(Duration::from_millis(millis))
     }
 
     #[tokio::test]
-    async fn test_two_tasks_random_sleeps() -> Result<(), Box<dyn std::error::Error>> {
+    async fn test_two_tasks_random_sleeps() -> super::Result<()> {
         let logs = tracing_forest::capture()
-            .on_registry()
+            .build()
             .on(async {
                 let a = async {
                     async {
                         info!(client = %"a", "sent request");
-                        sleep_rand().await;
+                        do_work().await;
                         info!(client = %"a", "received response");
                     }
                     .instrument(trace_span!("a request"))
                     .await;
 
-                    sleep_rand().await;
+                    do_work().await;
 
                     async {
                         info!(client = %"a", "sending response");
-                        sleep_rand().await;
+                        do_work().await;
                         info!(client = %"a", "response sent");
                     }
                     .instrument(trace_span!("a response"))
@@ -37,17 +41,17 @@ mod sync_tests {
                 let b = async {
                     async {
                         info!(client = %"b", "sent request");
-                        sleep_rand().await;
+                        do_work().await;
                         info!(client = %"b", "received response");
                     }
                     .instrument(trace_span!("b request"))
                     .await;
 
-                    sleep_rand().await;
+                    do_work().await;
 
                     async {
                         info!(client = %"b", "sending response");
-                        sleep_rand().await;
+                        do_work().await;
                         info!(client = %"b", "response sent");
                     }
                     .instrument(trace_span!("b response"))
@@ -71,7 +75,7 @@ mod sync_tests {
                 assert!(inner.children().len() == 2);
                 for child in inner.children().iter() {
                     let event = child.event()?;
-                    assert!(event.fields()[0].value == span.name());
+                    assert!(event.fields()[0].value() == span.name());
                 }
             }
         }
@@ -80,13 +84,17 @@ mod sync_tests {
     }
 
     #[tokio::test]
-    async fn test_filtering() -> Result<(), Box<dyn std::error::Error>> {
+    async fn test_filtering() -> super::Result<()> {
+        use tracing_forest::ForestLayer;
+        use tracing_subscriber::{filter::LevelFilter, layer::SubscriberExt, Registry};
+
         let logs = tracing_forest::capture()
-            .on_registry()
-            .with(tracing_subscriber::filter::LevelFilter::INFO)
+            .build_with(|layer: ForestLayer<_, _>| {
+                Registry::default().with(layer).with(LevelFilter::INFO)
+            })
             .on(async {
-                tracing::trace!("unimportant information");
-                tracing::info!("important information");
+                trace!("unimportant information");
+                info!("important information");
             })
             .await;
 
@@ -94,58 +102,75 @@ mod sync_tests {
 
         let info = logs[0].event()?;
 
-        assert!(info.message() == "important information");
+        assert!(info.message() == Some("important information"));
 
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_doc() {
-        tracing_forest::new()
-            .set_global(false)
-            .on_registry()
-            .on(async {
-                tracing::info!("Hello, world!");
+    // #[test]
+    // fn test_urgent() {
+    //     tracing_forest::init();
+    //     trace_span!("my_span").in_scope(|| {
+    //         info!("first");
+    //         info!("second");
+    //         info!(urgent = true, "third, but urgently");
+    //     });
+    // }
 
-                tracing::info_span!("my_span").in_scope(|| {
-                    tracing::info!("Relevant information");
-                })
-            })
-            .await;
-    }
+    // #[tracing::instrument]
+    // async fn conn(id: u32) {
+    //     for i in 0..3 {
+    //         do_work().await;
+    //         info!(id, "step {}", i);
+    //     }
+    // }
+
+    // #[tokio::test]
+    // async fn test_server() -> super::Result<()> {
+    //     tracing_forest::init();
+
+    //     let mut connections = vec![];
+
+    //     for id in 0..3 {
+    //         connections.push(tokio::spawn(conn(id)));
+    //     }
+
+    //     for conn in connections {
+    //         conn.await?;
+    //     }
+
+    //     Ok(())
+    // }
 }
 
-#[cfg(feature = "uuid")]
+#[cfg(all(feature = "uuid", feature = "tokio"))]
 mod uuid_tests {
     use tokio::time::{sleep, Duration};
     use tracing::trace_span;
     use tracing::{info, Instrument};
-    use tracing_forest::uuid_trace_span;
+    use tracing_forest::ForestLayer;
+    use tracing_subscriber::{layer::SubscriberExt, registry};
     use uuid::Uuid;
 
-    #[tokio::test(flavor = "current_thread")]
-    async fn test_panic_get_id_not_in_span() {
-        tracing_forest::capture()
-            .on_registry()
-            .on(async {
-                std::panic::set_hook(Box::new(|_| {}));
-                assert!(std::panic::catch_unwind(tracing_forest::id).is_err());
-            })
-            .await;
+    #[test]
+    fn test_panic_get_id_not_in_span() {
+        let _guard = tracing::subscriber::set_default(registry().with(ForestLayer::default()));
+        std::panic::set_hook(Box::new(|_| {}));
+        assert!(std::panic::catch_unwind(tracing_forest::id).is_err());
     }
 
-    #[tokio::test(flavor = "current_thread")]
-    async fn test_panic_get_id_not_in_subscriber() {
+    #[test]
+    fn test_panic_get_id_not_in_subscriber() {
         assert!(std::panic::catch_unwind(tracing_forest::id).is_err());
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn test_panic_get_id_after_close() -> Result<(), Box<dyn std::error::Error>> {
+    async fn test_panic_get_id_after_close() -> super::Result<()> {
         let logs = tracing_forest::capture()
-            .on_registry()
+            .build()
             .on(async {
                 let uuid = Uuid::new_v4();
-                uuid_trace_span!(uuid, "in a span").in_scope(|| {
+                trace_span!("in a span", %uuid).in_scope(|| {
                     let _ = tracing_forest::id();
                 });
                 std::panic::set_hook(Box::new(|_| {}));
@@ -163,18 +188,18 @@ mod uuid_tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn test_two_stacks_of_spans() -> Result<(), Box<dyn std::error::Error>> {
+    async fn test_two_stacks_of_spans() -> super::Result<()> {
         // Tests that two task running concurrently truely do not interfere
         // with each other's span data.
         let logs = tracing_forest::capture()
-            .on_registry()
+            .build()
             .on(async {
                 let a = async {
                     let first_id = Uuid::new_v4();
                     let second_id = Uuid::new_v4();
-                    uuid_trace_span!(first_id, "a_span").in_scope(|| {
+                    trace_span!("a_span", uuid = %first_id).in_scope(|| {
                         assert_eq!(first_id, tracing_forest::id());
-                        uuid_trace_span!(second_id, "a_span2").in_scope(|| {
+                        trace_span!("a_span2", uuid = %second_id).in_scope(|| {
                             assert_eq!(second_id, tracing_forest::id());
                         });
                         assert_eq!(first_id, tracing_forest::id());
@@ -184,9 +209,9 @@ mod uuid_tests {
                 let b = async {
                     let first_id = Uuid::new_v4();
                     let second_id = Uuid::new_v4();
-                    uuid_trace_span!(first_id, "b_span").in_scope(|| {
+                    trace_span!("b_span", uuid = %first_id).in_scope(|| {
                         assert_eq!(first_id, tracing_forest::id());
-                        uuid_trace_span!(second_id, "b_span2").in_scope(|| {
+                        trace_span!("b_span2", uuid = %second_id).in_scope(|| {
                             assert_eq!(second_id, tracing_forest::id());
                         });
                         assert_eq!(first_id, tracing_forest::id());
@@ -210,9 +235,9 @@ mod uuid_tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn test_get_many_times() -> Result<(), Box<dyn std::error::Error>> {
+    async fn test_get_many_times() -> super::Result<()> {
         let logs = tracing_forest::capture()
-            .on_registry()
+            .build()
             .on(async {
                 async {
                     let a = tracing_forest::id();
@@ -227,46 +252,46 @@ mod uuid_tests {
         assert!(logs.len() == 1);
 
         let span = logs[0].span()?;
-        assert!(span.is_empty());
+        assert!(span.children().is_empty());
         assert!(span.name() == "my_span");
 
         Ok(())
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn test_uuid_span_macros() -> Result<(), Box<dyn std::error::Error>> {
+    async fn test_uuid_span_macros() -> super::Result<()> {
         let uuid = Uuid::new_v4();
         let logs = tracing_forest::capture()
-            .on_registry()
+            .build()
             .on(async {
-                tracing_forest::uuid_trace_span!(uuid, "my_span").in_scope(|| {
+                tracing::trace_span!("my_span", %uuid).in_scope(|| {
                     assert_eq!(uuid, tracing_forest::id());
                 });
-                tracing_forest::uuid_trace_span!(uuid, "my_span", ans = 42).in_scope(|| {
+                tracing::trace_span!("my_span", %uuid, ans = 42).in_scope(|| {
                     assert_eq!(uuid, tracing_forest::id());
                 });
-                tracing_forest::uuid_debug_span!(uuid, "my_span").in_scope(|| {
+                tracing::debug_span!("my_span", %uuid).in_scope(|| {
                     assert_eq!(uuid, tracing_forest::id());
                 });
-                tracing_forest::uuid_debug_span!(uuid, "my_span", ans = 42).in_scope(|| {
+                tracing::debug_span!("my_span", %uuid, ans = 42).in_scope(|| {
                     assert_eq!(uuid, tracing_forest::id());
                 });
-                tracing_forest::uuid_info_span!(uuid, "my_span").in_scope(|| {
+                tracing::info_span!("my_span", %uuid).in_scope(|| {
                     assert_eq!(uuid, tracing_forest::id());
                 });
-                tracing_forest::uuid_info_span!(uuid, "my_span", ans = 42).in_scope(|| {
+                tracing::info_span!("my_span", %uuid, ans = 42).in_scope(|| {
                     assert_eq!(uuid, tracing_forest::id());
                 });
-                tracing_forest::uuid_warn_span!(uuid, "my_span").in_scope(|| {
+                tracing::warn_span!("my_span", %uuid).in_scope(|| {
                     assert_eq!(uuid, tracing_forest::id());
                 });
-                tracing_forest::uuid_warn_span!(uuid, "my_span", ans = 42).in_scope(|| {
+                tracing::warn_span!("my_span", %uuid, ans = 42).in_scope(|| {
                     assert_eq!(uuid, tracing_forest::id());
                 });
-                tracing_forest::uuid_error_span!(uuid, "my_span").in_scope(|| {
+                tracing::error_span!("my_span", %uuid).in_scope(|| {
                     assert_eq!(uuid, tracing_forest::id());
                 });
-                tracing_forest::uuid_error_span!(uuid, "my_span", ans = 42).in_scope(|| {
+                tracing::error_span!("my_span", %uuid, ans = 42).in_scope(|| {
                     assert_eq!(uuid, tracing_forest::id());
                 });
             })
@@ -275,28 +300,28 @@ mod uuid_tests {
         for (tree, level) in logs.into_iter().zip([
             "TRACE", "TRACE", "DEBUG", "DEBUG", "INFO", "INFO", "WARN", "WARN", "ERROR", "ERROR",
         ]) {
-            assert!(uuid == tree.uuid());
-            assert!(tree.level().as_str() == level);
-
             let span = tree.span()?;
-            assert!(span.is_empty());
+            assert!(span.uuid() == uuid);
+            assert!(span.level().as_str() == level);
+            assert!(span.children().is_empty());
         }
 
         Ok(())
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn test_instrument_with_uuid() -> Result<(), Box<dyn std::error::Error>> {
+    async fn test_instrument_with_uuid() -> super::Result<()> {
         let logs = tracing_forest::capture()
-            .on_registry()
+            .build()
             .on(async {
                 let id = Uuid::new_v4();
                 info!(id = %id, "here's the id");
+
                 async {
                     assert_eq!(id, tracing_forest::id());
                 }
-                .instrument(uuid_trace_span!(id, "in_async"))
-                .await
+                .instrument(trace_span!("in_async", uuid = %id))
+                .await;
             })
             .await;
 
@@ -305,51 +330,49 @@ mod uuid_tests {
         let event = logs[0].event()?;
         assert!(event.fields().len() == 1);
         let field = &event.fields()[0];
-        assert!(field.key == "id");
+        assert!(field.key() == "id");
 
-        let tree = &logs[1];
-        assert!(tree.uuid().to_string() == field.value);
-
-        let span = tree.span()?;
-        assert!(span.is_empty());
+        let span = logs[1].span()?;
+        assert!(span.uuid().to_string() == field.value());
+        assert!(span.children().is_empty());
 
         Ok(())
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn test_new_builder2() -> Result<(), Box<dyn std::error::Error>> {
+    async fn test_new_builder2() -> super::Result<()> {
         let logs = tracing_forest::capture()
-            .on_registry()
+            .build()
             .on(async {
                 let handle = tokio::spawn(async {
-                    tracing::error!("Test message");
+                    info!("Test message");
                 });
 
-                tracing::error!("Waiting on signal");
+                info!("Waiting on signal");
                 sleep(Duration::from_millis(500)).await;
                 handle.await.unwrap();
-                tracing::error!("Stopping");
+                info!("Stopping");
             })
             .await;
 
         assert!(logs.len() == 3);
 
         let waiting = logs[0].event()?;
-        assert!(waiting.message() == "Waiting on signal");
+        assert!(waiting.message() == Some("Waiting on signal"));
 
         let test = logs[1].event()?;
-        assert!(test.message() == "Test message");
+        assert!(test.message() == Some("Test message"));
 
         let stopping = logs[2].event()?;
-        assert!(stopping.message() == "Stopping");
+        assert!(stopping.message() == Some("Stopping"));
 
         Ok(())
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn test_docs_example() -> Result<(), Box<dyn std::error::Error>> {
+    async fn test_docs_example() -> super::Result<()> {
         let logs = tracing_forest::capture()
-            .on_registry()
+            .build()
             .on(async {
                 info!("Ready");
                 info!("Set");
@@ -360,263 +383,91 @@ mod uuid_tests {
         assert!(logs.len() == 3);
 
         let ready = logs[0].event()?;
-        assert!(ready.message() == "Ready");
+        assert!(ready.message() == Some("Ready"));
 
         let set = logs[1].event()?;
-        assert!(set.message() == "Set");
+        assert!(set.message() == Some("Set"));
 
         let go = logs[2].event()?;
-        assert!(go.message() == "Go!");
+        assert!(go.message() == Some("Go!"));
 
         Ok(())
     }
 }
 
-#[cfg(feature = "derive")]
-tracing_forest::declare_tags! {
-    use tracing_forest::Tag;
-
-    #[allow(dead_code)]
-    #[derive(Tag)]
-    pub(crate) enum KanidmTag {
-        #[tag(lvl = "info", msg = "admin.info", macro = "admin_info")]
-        AdminInfo,
-        #[tag(lvl = "error", msg = "request.error", macro = "request_error")]
-        RequestError,
-        #[tag(
-            lvl = "error",
-            msg = "security.critical",
-            icon = '🔐',
-            macro = "security_critical"
-        )]
-        SecurityCritical,
-    }
-
-    #[allow(dead_code)]
-    #[derive(Tag)]
-    pub(crate) enum MyTag {
-        #[tag(lvl = "trace", msg = "simple")]
-        Simple,
-        #[tag(
-            lvl = "error",
-            msg = "all.features",
-            icon = '🔐',
-            macro = "all_features"
-        )]
-        AllFeatures,
-    }
-
-    #[allow(dead_code)]
-    #[derive(Tag)]
-    pub(crate) enum GreetingTag {
-        #[tag(lvl = "info", msg = "greeting", macro = "greeting")]
-        Greeting,
-    }
-
-    #[allow(dead_code)]
-    #[derive(Tag)]
-    pub(crate) enum BearTag {
-        #[tag(lvl = "info", msg = "brown.bear", macro = "brown_bear")]
-        BrownBear,
-        #[tag(lvl = "warn", msg = "black.bear", macro = "black_bear")]
-        BlackBear,
-        #[tag(lvl = "error", msg = "polar.bear", macro = "polar_bear")]
-        PolarBear,
-    }
-}
-
-#[cfg(all(feature = "derive", feature = "sync"))]
+#[cfg(feature = "tokio")]
 mod tag_tests {
-    use tracing_forest::Tag;
+    use tracing::{error, info, Event, Level};
+    use tracing_forest::tag::Tag;
+
+    fn kanidm_tag(event: &Event) -> Option<Tag> {
+        let target = event.metadata().target();
+        let level = *event.metadata().level();
+
+        match target {
+            "security" if level == Level::ERROR => {
+                Some(Tag::new_custom_level(Some(target), "critical", '🔐'))
+            }
+            "admin" | "request" => Some(Tag::new(Some(target), level)),
+            _ => None,
+        }
+    }
 
     #[tokio::test]
-    async fn test_macros() -> Result<(), Box<dyn std::error::Error>> {
+    async fn test_kanidm_tag() -> super::Result<()> {
         let logs = tracing_forest::capture()
-            .set_tag(crate::tracing_forest_tag::KanidmTag::from_field)
-            .on_registry()
+            .set_tag(kanidm_tag)
+            .build()
             .on(async {
-                admin_info!("some info for the admin");
-                request_error!("the request timed out");
-                security_critical!("the db has been breached");
+                info!(target: "admin", "some info for the admin");
+                error!(target: "request", "the request timed out");
+                error!(target: "security", "the db has been breached");
+                info!("no tags here");
+                info!(target: "unrecognized", "unrecognizable tag");
             })
             .await;
 
-        assert!(logs.len() == 3);
+        assert!(logs.len() == 5);
 
         let admin_info = logs[0].event()?;
-        assert!(admin_info.message() == "some info for the admin");
-        assert!(admin_info.tag().unwrap().message == "admin.info");
+        assert!(admin_info.message() == Some("some info for the admin"));
+        assert!(admin_info.tag() == "admin.info");
 
         let request_error = logs[1].event()?;
-        assert!(request_error.message() == "the request timed out");
-        assert!(request_error.tag().unwrap().message == "request.error");
+        assert!(request_error.message() == Some("the request timed out"));
+        assert!(request_error.tag() == "request.error");
 
         let security_critical = logs[2].event()?;
-        assert!(security_critical.message() == "the db has been breached");
-        assert!(security_critical.tag().unwrap().message == "security.critical");
+        assert!(security_critical.message() == Some("the db has been breached"));
+        assert!(security_critical.tag() == "security.critical");
+
+        let no_tags = logs[3].event()?;
+        assert!(no_tags.message() == Some("no tags here"));
+        assert!(no_tags.tag() == "info");
+
+        let unrecognized = logs[4].event()?;
+        assert!(unrecognized.message() == Some("unrecognizable tag"));
+        assert!(unrecognized.tag() == "info");
 
         Ok(())
     }
-
-    #[tokio::test]
-    async fn test_demo_macros() -> Result<(), Box<dyn std::error::Error>> {
-        let logs = tracing_forest::capture()
-            .set_tag(crate::tracing_forest_tag::MyTag::from_field)
-            .on_registry()
-            .on(async {
-                use tracing_forest::Tag;
-                tracing::trace!(
-                    __event_tag = crate::tracing_forest_tag::MyTag::Simple.as_field(),
-                    "a simple log"
-                );
-                all_features!("all the features wow");
-            })
-            .await;
-
-        assert!(logs.len() == 2);
-
-        let simple = logs[0].event()?;
-        assert!(simple.message() == "a simple log");
-        assert!(simple.tag().unwrap().message == "simple");
-
-        let all_features = logs[1].event()?;
-        assert!(all_features.message() == "all the features wow");
-        assert!(all_features.tag().unwrap().message == "all.features");
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_panic_tag_unset() {
-        tracing_forest::capture()
-            .on_registry()
-            .on(async {
-                std::panic::set_hook(Box::new(|_| {}));
-                assert!(std::panic::catch_unwind(|| {
-                    all_features!("this should be panicking");
-                })
-                .is_err());
-            })
-            .await;
-    }
 }
 
-#[cfg(feature = "attribute")]
-mod attribute_tests {
-    use std::time::Duration;
-    use tokio::time::{interval, sleep};
-    use tracing::{info, trace_span, Instrument};
+// mod nodeps_tests {
+//     use tracing::{info, info_span};
+//     use tracing_forest::{ForestLayer, Printer};
+//     use tracing_subscriber::{Layer, Registry};
 
-    mod blocking {
-        use super::*;
-
-        #[tracing_forest::test]
-        fn test_early_return() {
-            // tests that returning in the test doesn't prevent logging
-            info!("a log");
-            return;
-        }
-
-        #[tracing_forest::test]
-        fn test_many_messages() {
-            info!(
-                message = "first field",
-                message = "second field",
-                "the message"
-            );
-        }
-
-        #[tracing_forest::test]
-        fn test_subscriber() {
-            tracing::info!("Hello, world!");
-        }
-
-        #[tracing_forest::test]
-        fn test_immediate() {
-            trace_span!("my_span").in_scope(|| {
-                info!("first");
-                info!("second");
-                info!(immediate = true, "third, but immediately");
-            })
-        }
-    }
-
-    #[cfg(feature = "sync")]
-    mod sync {
-        use super::*;
-
-        #[tracing_forest::test]
-        #[tokio::test]
-        async fn test_async_early_return() {
-            // test that returning in the test doesn't prevent
-            // the processing thread handle from being awaited
-            info!("a log");
-            return;
-        }
-
-        #[tracing_forest::test]
-        #[tokio::test]
-        async fn test_instrument() {
-            use std::time::Duration;
-            use tokio::time::sleep;
-
-            async {
-                for i in 0..3 {
-                    info!("iter: {}", i);
-                    sleep(Duration::from_millis(50)).await;
-                }
-            }
-            .instrument(trace_span!("takes awhile"))
-            .await;
-        }
-
-        #[tracing_forest::test]
-        #[tokio::test]
-        async fn test_counting() {
-            let pause = Duration::from_millis(50);
-            let evens = async {
-                let mut interval = interval(pause);
-                for i in 0..3 {
-                    interval.tick().await;
-                    info!("{}", i * 2);
-                }
-            }
-            .instrument(trace_span!("count evens"));
-
-            let odds = async {
-                sleep(pause / 2).await;
-                let mut interval = interval(pause);
-                for i in 0..3 {
-                    interval.tick().await;
-                    info!("{}", i * 2 + 1);
-                }
-            }
-            .instrument(trace_span!("count odds"));
-
-            let _ = tokio::join!(evens, odds);
-        }
-
-        #[tracing_forest::main]
-        #[tokio::main(flavor = "current_thread")]
-        #[test]
-        async fn test_main() {
-            info!("running as a main function");
-        }
-
-        #[tracing_forest::test]
-        #[tokio::test]
-        async fn test_immediate() {
-            async {
-                info!("logged first chronologically");
-                info!(immediate = true, "logged second, but printed immediately");
-            }
-            .instrument(trace_span!("my_span"))
-            .await
-        }
-    }
-}
-
-// TODO: write better tests
-// * Test for a filter filtering out some logs
-// * fallbacks
-// *
+//     #[test]
+//     fn test_manual_with_json() {
+//         let processor = Printer::from_formatter(serde_json::to_string_pretty);
+//         let layer = ForestLayer::from(processor);
+//         let subscriber = layer.with_subscriber(Registry::default());
+//         tracing::subscriber::with_default(subscriber, || {
+//             info!("hello, world!");
+//             info_span!("my-span").in_scope(|| {
+//                 info!("wassup");
+//             })
+//         });
+//     }
+// }

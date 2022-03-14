@@ -1,6 +1,6 @@
 use crate::cfg_chrono;
-use crate::layer::{Fields, KeyValue};
-use serde::{ser::SerializeMap, Serializer};
+use crate::tree::FieldSet;
+use serde::ser::{SerializeMap, Serializer};
 use std::time::Duration;
 use tracing::Level;
 
@@ -12,10 +12,10 @@ pub(crate) fn nanos<S: Serializer>(duration: &Duration, serializer: S) -> Result
     serializer.serialize_u128(duration.as_nanos())
 }
 
-pub(crate) fn fields<S: Serializer>(fields: &Fields, serializer: S) -> Result<S::Ok, S::Error> {
+pub(crate) fn fields<S: Serializer>(fields: &FieldSet, serializer: S) -> Result<S::Ok, S::Error> {
     let mut model = serializer.serialize_map(Some(fields.len()))?;
-    for KeyValue { key, value } in fields.iter() {
-        model.serialize_entry(key, value)?;
+    for field in fields.iter() {
+        model.serialize_entry(field.key(), field.value())?;
     }
     model.end()
 }

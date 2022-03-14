@@ -15,17 +15,16 @@
 //! and async-aware diagnostics via the [`Subscriber`] trait. The
 //! [`tracing-subscriber`] crate provides tools for composing [`Subscriber`]s
 //! from smaller units. This crate extends [`tracing-subscriber`] by providing
-//! [`TreeLayer`], a [`Layer`] that preserves contextual coherence of trace
+//! [`ForestLayer`], a [`Layer`] that preserves contextual coherence of trace
 //! data from concurrent tasks when logging.
 //!
 //! This crate is intended for programs running many nontrivial and disjoint
-//! tasks concurrently, like server backends. Unlike other [`Subscriber`]s which
-//! simply keep track of the context of an event, `tracing-forest` preserves
-//! the contextual coherence when writing logs, allowing readers to easily trace
-//! a sequence of events from the same task.
+//! tasks concurrently, like server backends. Unlike [other `Subscriber`s][crate#contextual-coherence-in-action]
+//! which simply keep track of the context of an event, `tracing-forest` preserves
+//! the contextual coherence when writing logs even in parallel contexts, allowing
+//! readers to easily trace a sequence of events from the same task.
 //!
-//! `tracing-forest` provides many tools for authoring applications, but can
-//! also be extended to author other libraries.
+//! `tracing-forest` is intended for authoring applications.
 //!
 //! [`tracing-subscriber`]: tracing_subscriber
 //! [`Layer`]: tracing_subscriber::layer::Layer
@@ -38,305 +37,245 @@
 //! ```toml
 //! tracing-forest = { version = "0.1", features = ["full"] }
 //! ```
-//! Then, add the [`#[tracing_forest::main]`][attr_main] attribute to your main function:
+//! Then, add [`tracing_forest::init`](crate::init) to your main function:
 //! ```
 //! # #[allow(clippy::needless_doctest_main)]
-//! #[tracing_forest::main]
-//! #[tokio::main]
-//! async fn main() {
-//!     // do stuff here...
-//!     tracing::trace!("Hello, world!");
+//! fn main() {
+//!     tracing_forest::init();
+//!     // ...
 //! }
 //! ```
-//! For more configuration options, see the
-//! [`builder` module documentation][mod@builder].
+//! For useful configuration abstractions, see the [`builder` module documentation][builder].
 //!
-//! # Contextual Coherence in action
+//! # Contextual coherence in action
 //!
-//! This example contains two counters, one for evens and another for odds.
-//! Running it will emit trace data at the root level, implying that all the
-//! events are _independent_, meaning each trace will be processed and written
-//! as it's collected. In this case, the logs will count up chronologically.
+//! Similar to this crate, the [`tracing-tree`] crate collects and writes trace
+//! data as a tree. Unlike this crate, it doesn't maintain contextual coherence
+//! in parallel contexts.
+//!
+//! Observe the below program, which simulates serving multiple clients concurrently.
 //! ```
-//! # use std::time::Duration;
-//! # use tokio::time::sleep;
-//! # #[tokio::test]
-//! # async fn test_contextual_coherence() {
-//! # tracing_forest::new().on_registry().on(async {
-//! let evens = async {
-//!     for i in 0..3 {
-//!         tracing::info!("{}", i * 2);
-//!         // pause for `odds`
-//!         sleep(Duration::from_millis(100)).await;
-//!     }
-//! };
-//!
-//! let odds = async {
-//!     // pause for `evens`
-//!     sleep(Duration::from_millis(50)).await;
-//!     for i in 0..3 {
-//!         tracing::info!("{}", i * 2 + 1);
-//!         // pause for `evens`
-//!         sleep(Duration::from_millis(100)).await;
-//!     }
-//! };
-//!
-//! let _ = tokio::join!(evens, odds);
-//! # }).await;
+//! # async fn some_expensive_operation() {}
+//! # mod tracing_tree {
+//! #     #[derive(Default)]
+//! #     pub struct HierarchicalLayer;
+//! #     impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for HierarchicalLayer {}
 //! # }
+//! use tracing::info;
+//! use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry};
+//! use tracing_tree::HierarchicalLayer;
+//!
+//! #[tracing::instrument]
+//! async fn conn(id: u32) {
+//!     for i in 0..3 {
+//!         some_expensive_operation().await;
+//!         info!(id, "step {}", i);
+//!     }
+//! }
+//!
+//! #[tokio::main(flavor = "multi_thread")]
+//! async fn main() {
+//!     // Use a `tracing-tree` subscriber
+//!     Registry::default()
+//!         .with(HierarchicalLayer::default())
+//!         .init();
+//!
+//!     let mut connections = vec![];
+//!
+//!     for id in 0..3 {
+//!         let handle = tokio::spawn(conn(id));
+//!         connections.push(handle);
+//!     }
+//!
+//!     for conn in connections {
+//!         conn.await.unwrap();
+//!     }
+//! }
 //! ```
+//! With `tracing-tree`, the trace data is printed in chronological order, making
+//! it difficult to parse the sequence of events for each client.
 //! ```log
-//! INFO     💬 [info]: 0
-//! INFO     💬 [info]: 1
-//! INFO     💬 [info]: 2
-//! INFO     💬 [info]: 3
-//! INFO     💬 [info]: 4
-//! INFO     💬 [info]: 5
+//! conn id=2
+//! conn id=0
+//! conn id=1
+//!   23ms  INFO step 0, id=2
+//!   84ms  INFO step 0, id=1
+//!   94ms  INFO step 1, id=2
+//!   118ms  INFO step 0, id=0
+//!   130ms  INFO step 1, id=1
+//!   193ms  INFO step 2, id=2
+//!
+//!   217ms  INFO step 1, id=0
+//!   301ms  INFO step 2, id=1
+//!
+//!   326ms  INFO step 2, id=0
+//!
 //! ```
-//! [Instrumenting] the counters tells the [`TreeLayer`] to preserve the
-//! contextual coherency of trace data from each task. Traces from the `even`
-//! counter will be grouped, and traces from the `odd` counter will be grouped.
+//! We can instead use `tracing-forest` as a drop-in replacement for `tracing-tree`.
 //! ```
-//! # use std::time::Duration;
-//! # use tokio::time::sleep;
-//! # use tracing::Instrument;
-//! # #[tokio::main(flavor = "current_thread")]
-//! # async fn concurrent_counting() {
-//! # tracing_forest::new().on_registry().on(async {
-//! let evens = async {
+//! use tracing::info;
+//! use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Registry};
+//! use tracing_forest::ForestLayer;
+//!
+//! #[tracing::instrument]
+//! async fn conn(id: u32) {
 //!     // ...
-//! #   for i in 0..3 {
-//! #       tracing::info!("{}", i * 2);
-//! #       sleep(Duration::from_millis(100)).await;
-//! #   }
-//! }.instrument(tracing::trace_span!("counting_evens"));
+//! }
 //!
-//! let odds = async {
+//! #[tokio::main(flavor = "multi_thread")]
+//! async fn main() {
+//!     // Use a `tracing-forest` subscriber
+//!     Registry::default()
+//!         .with(ForestLayer::default())
+//!         .init();
+//!
 //!     // ...
-//! #   sleep(Duration::from_millis(50)).await;
-//! #   for i in 0..3 {
-//! #       tracing::info!("{}", i * 2 + 1);
-//! #       sleep(Duration::from_millis(100)).await;
-//! #   }
-//! }.instrument(tracing::trace_span!("counting_odds"));
-//!     
-//! let _ = tokio::join!(evens, odds);
-//! # }).await;
-//! # }
+//! }
 //! ```
+//! `tracing-forest` trades chronological ordering in favor of maintaining
+//! contextual coherence, providing a clearer view into the sequence of events
+//! that occurred in each concurrent branch.
 //! ```log
-//! TRACE    counting_evens [ 409µs | 100.000% ]
-//! INFO     ┕━ 💬 [info]: 0
-//! INFO     ┕━ 💬 [info]: 2
-//! INFO     ┕━ 💬 [info]: 4
-//! TRACE    counting_odds [ 320µs | 100.000% ]
-//! INFO     ┕━ 💬 [info]: 1
-//! INFO     ┕━ 💬 [info]: 3
-//! INFO     ┕━ 💬 [info]: 5
+//! INFO     conn [ 150µs | 100.00% ]
+//! INFO     ┝━ ＿ [info]: step 0 | id: 1
+//! INFO     ┝━ ＿ [info]: step 1 | id: 1
+//! INFO     ┕━ ＿ [info]: step 2 | id: 1
+//! INFO     conn [ 343µs | 100.00% ]
+//! INFO     ┝━ ＿ [info]: step 0 | id: 0
+//! INFO     ┝━ ＿ [info]: step 1 | id: 0
+//! INFO     ┕━ ＿ [info]: step 2 | id: 0
+//! INFO     conn [ 233µs | 100.00% ]
+//! INFO     ┝━ ＿ [info]: step 0 | id: 2
+//! INFO     ┝━ ＿ [info]: step 1 | id: 2
+//! INFO     ┕━ ＿ [info]: step 2 | id: 2
 //! ```
-//! Although the numbers were logged chronologically, they appear grouped in the
-//! spans they originated from.
 //!
-//! [join]: tokio::join
-//! [instrumenting]: tracing::instrument::Instrument::instrument
-//! [`Span`]: tracing::Span
+//! [`tracing-tree`]: https://crates.io/crates/tracing-tree
 //!
-//! # Distinguishing event kinds with tags
+//! # Categorizing events with tags
 //!
-//! Beyond log levels, this crate provides the [`Tag`] trait, which allows
-//! events to carry additional categorical data.
+//! This crate allows attaching supplemental information to events with tags.
 //!
-//! Untagged logs aren't very informative at a glance.
+//! Without tags, it's difficult to distinguish where events are occurring in a system.
 //! ```log
-//! INFO     💬 [info]: some info for the admin
+//! INFO     ＿ [info]: some info for the admin
 //! ERROR    🚨 [error]: the request timed out
 //! ERROR    🚨 [error]: the db has been breached
 //! ```
 //!
-//! But with custom tags, they can be!
+//! Tags help make this distinction more visible.
 //! ```log
-//! INFO     💬 [admin_info]: some info for the admin
-//! ERROR    🚨 [request_error]: the request timed out
-//! ERROR    🔐 [security_critical]: the db has been breached
+//! INFO     ＿ [admin.info]: some info for the admin
+//! ERROR    🚨 [request.error]: the request timed out
+//! ERROR    🔐 [security.critical]: the db has been breached
 //! ```
 //!
-//! See the [`tag` module documentation][crate::tag] for details.
+//! See the [`tag` module-level documentation](crate::tag) for details.
 //!
-//! # Attaching `Uuid`s to spans
+//! # Attaching `Uuid`s to trace data
 //!
-//! By enabling the `uuid` feature flag, spans created in the context of a
-//! [`TreeLayer`] subscriber are assigned a `Uuid`. At the root level, the uuid
-//! is randomly generated, whereas child spans adopt the uuid of their parent.
+//! When the `uuid` feature is enabled, the `ForestLayer` will automatically attach
+//! [`Uuid`]s to trace data. Events will adopt the uuid of their span, or the "nil"
+//! uuid at the root level. Spans will adopt the uuid of parent spans, or generate
+//! a new uuid at the root level.
 //!
-//! ### Retreiving the current `Uuid`
-//!
-//! To retreive the uuid of the current span, use the [`id`] function.
-//!
-//! ### Initializing a span with a specific `Uuid`
-//!
-//! To set the `Uuid` of a new span, use [`uuid_span!`], or the shorthand
-//! versions, [`uuid_trace_span!`], [`uuid_debug_span!`], [`uuid_info_span!`],
-//! [`uuid_warn_span!`], or [`uuid_error_span!`].
-//!
-//! ## Examples
-//!
-//! Passing in custom `Uuid`s to nested spans:
+//! A span's `Uuid` can also be passed in manually to override adopting the parent's
+//! `Uuid` by passing it in as a field named `uuid`:
 //! ```
-//! # use tracing_forest::uuid_trace_span;
-//! # use ::uuid::Uuid;
-//! # #[tracing_forest::test]
-//! # fn test_stack_of_spans() {
-//! let first_id = Uuid::new_v4();
-//! let second_id = Uuid::new_v4();
-//!
-//! tracing::info!("first_id: {}", first_id);
-//! tracing::info!("second_id: {}", second_id);
-//!
-//! // Explicitly pass `first_id` into a new span
-//! uuid_trace_span!(first_id, "first").in_scope(|| {
-//!
-//!     // Check that the ID we passed in is the current ID
-//!     assert_eq!(first_id, tracing_forest::id());
-//!
-//!     // Open another span, explicitly passing in a new ID
-//!     uuid_trace_span!(second_id, "second").in_scope(|| {
-//!
-//!         // Check that the second ID was set
-//!         assert_eq!(second_id, tracing_forest::id());
-//!     });
-//!
-//!     // `first_id` should still be the current ID
-//!     assert_eq!(first_id, tracing_forest::id());
-//! });
-//! # }
-//! ```
-//! ```log
-//! 00000000-0000-0000-0000-000000000000 INFO     💬 [info]: first_id: 9f197cc3-b340-4df6-be53-4ab742a3c586
-//! 00000000-0000-0000-0000-000000000000 INFO     💬 [info]: second_id: d552ecfa-a568-4b68-9e68-a4f1f7918579
-//! 9f197cc3-b340-4df6-be53-4ab742a3c586 TRACE    first [ 76.6µs | 80.206% / 100.000% ]
-//! d552ecfa-a568-4b68-9e68-a4f1f7918579 TRACE    ┕━ second [ 15.2µs | 19.794% ]
-//! ```
-//!
-//! Instrumenting a future with a span using a custom `Uuid`:
-//! ```
-//! # use tracing::{info, Instrument};
-//! # use ::uuid::Uuid;
-//! # #[tracing_forest::test]
-//! # #[tokio::test]
-//! # async fn test_instrument_with_uuid() {
+//! # use tracing::info_span;
+//! # use uuid::Uuid;
 //! let id = Uuid::new_v4();
-//! info!("id: {}", id);
 //!
-//! async {
-//!     assert_eq!(id, tracing_forest::id());
-//! }.instrument(uuid_trace_span!(id, "in_async")).await;
-//! # }
+//! let span = info_span!("my_span", uuid = %id);
 //! ```
-//! ```log
-//! 00000000-0000-0000-0000-000000000000 INFO     💬 [info]: id: 5aacc2d4-f625-401b-9bb8-dc5c355fd31b
-//! 5aacc2d4-f625-401b-9bb8-dc5c355fd31b TRACE    in_async [ 18.6µs | 100.000% ]
+//!
+//! It can also be retreived from the most recently entered span with
+//! [`tracing_forest::id`](crate::id):
+//! ```
+//! # use tracing::info_span;
+//! # use uuid::Uuid;
+//! # tracing_forest::init();
+//! let id = Uuid::new_v4();
+//!
+//! info_span!("my_span", uuid = %id).in_scope(|| {
+//!     assert!(id == tracing_forest::id());
+//! });
 //! ```
 //!
 //! # Immediate logs
 //!
-//! This crate also provides functionality to immediately format and print logs
-//! to stderr in the case of logs with high urgency. This can be done by setting
-//! the `immediate` field to `true` in the trace data.
+//! Since `tracing-forest` stores trace data in memory until the root span finishes,
+//! it can be a long time until logs ever written. This can be an issue when some
+//! logs are too urgent to wait.
+//!
+//! To resolve this, the `immediate` field can be used on an event to print the
+//! event and it's parent spans to stderr. The event will still appear in the
+//! trace tree written once the root span closes.
 //!
 //! ## Example
 //!
 //! ```
-//! # use tracing::{info, trace_span};
-//! # #[tracing_forest::test]
-//! # fn test_immediate() {
+//! use tracing::{info, trace_span};
+//!
+//! tracing_forest::init();
+//!
 //! trace_span!("my_span").in_scope(|| {
 //!     info!("first");
 //!     info!("second");
 //!     info!(immediate = true, "third, but immediately");
-//! })
-//! # }
+//! });
 //! ```
 //! ```log
-//! 💬 IMMEDIATE 💬 INFO     my_span > third, but immediately
-//! TRACE    my_span [ 163µs | 100.000% ]
-//! INFO     ┕━ 💬 [info]: first
-//! INFO     ┕━ 💬 [info]: second
-//! INFO     ┕━ 💬 [info]: third, but immediately
+//! INFO     ＿ IMMEDIATE ＿ my_span > third, but immediately
+//! TRACE    my_span [ 125µs | 100.000% ]
+//! INFO     ┝━ ＿ [info]: first
+//! INFO     ┝━ ＿ [info]: second
+//! INFO     ┕━ ＿ [info]: third, but immediately
 //! ```
 //!
 //! # Feature flags
 //!
-//! `tracing-forest` uses feature flags to reduce dependencies in your code.
+//! This crate uses feature flags to reduce dependency bloat.
 //!
 //! * `full`: Enables all features listed below.
 //! * `uuid`: Enables spans to carry operation IDs.
 //! * `chrono`: Enables timestamps on trace data.
 //! * `smallvec`: Enables some performance optimizations.
-//! * `sync`: Enables the [`AsyncProcessor`] type.
-//! * `json`: Enables JSON formatting for logs.
-//! * `derive`: Enables [`#[derive(Tag)]`][derive] for making custom [tag] types.
-//! * `attributes`: Enables the [`#[tracing_forest::test]`][attr_test] and
-//! [`#[tracing_forest::main]`][attr_main] attributes.
+//! * `tokio`: Enables [`worker_task`] and [`capture`].
+//! * `serde`: Enables log trees to be serialized, which is [useful for formatting][serde_fmt].
 //!
-//! [`Uuid`]: ::uuid::Uuid
-//! [`AsyncProcessor`]: crate::processor::sync::AsyncProcessor
-//! [derive]: tracing_forest_macros::Tag
-//! [attr_test]: tracing_forest_macros::test
-//! [attr_main]: tracing_forest_macros::main
-
-cfg_sync! {
-    pub mod builder;
-}
-pub mod formatter;
-pub mod layer;
+//! [`Uuid`]: uuid::Uuid
+//! [serde_fmt]: crate::printer::Formatter#examples
+#![doc(issue_tracker_base_url = "https://github.com/QnnOkabayashi/tracing-forest/issues")]
+#![cfg_attr(
+    docsrs,
+    // Allows displaying cfgs/feature flags in the documentation.
+    feature(doc_cfg),
+    // Allows adding traits to RustDoc's list of "notable traits"
+    // feature(doc_notable_trait),
+    // Fail the docs build if any intra-docs links are broken
+    deny(rustdoc::broken_intra_doc_links),
+)]
+pub mod printer;
 pub mod processor;
 pub mod tag;
-#[doc(hidden)]
+pub mod tree;
 #[macro_use]
 mod cfg;
-#[doc(hidden)]
-#[cfg(feature = "json")]
-mod ser;
-cfg_uuid! {
-    mod uuid;
-
-    #[macro_use]
-    mod macros;
-}
 mod fail;
+mod layer;
 
-// Items that are required for macros but not intended for public API
-#[doc(hidden)]
-pub mod private {
-    #[cfg(feature = "uuid")]
-    pub use crate::uuid::into_u64_pair;
-    pub use tracing::subscriber::set_default;
-    pub use tracing_subscriber::{fmt::TestWriter, Layer, Registry};
-    pub const TRACE_ICON: char = '📍';
-    pub const DEBUG_ICON: char = '🐛';
-    pub const INFO_ICON: char = '💬';
-    pub const WARN_ICON: char = '🚧';
-    pub const ERROR_ICON: char = '🚨';
+pub use layer::{init, ForestLayer};
+pub use printer::{Formatter, Printer};
+pub use processor::Processor;
+
+cfg_tokio! {
+    pub mod builder;
+    pub use builder::{capture, worker_task};
 }
-
-pub use crate::builder::{capture, new};
-pub use crate::layer::TreeLayer;
-pub use crate::tag::Tag;
 
 cfg_uuid! {
-    pub use crate::uuid::id;
-}
-
-cfg_attributes! {
-    #[doc(inline)]
-    pub use tracing_forest_macros::test;
-    #[doc(inline)]
-    pub use tracing_forest_macros::main;
-}
-
-cfg_derive! {
-    #[doc(inline)]
-    pub use tracing_forest_macros::Tag;
+    pub use layer::id::id;
 }
 
 mod sealed {
