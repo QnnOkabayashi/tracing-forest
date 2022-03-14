@@ -3,19 +3,12 @@
 //!
 //! It is intended to maximize the amount of concurrent operations to demonstrate
 //! that `tracing-forest` does, in fact, keep each one coherent.
-use rand::Rng;
-use tokio::time::{sleep, Duration};
-use tracing::{info, trace_span, Instrument};
+use tracing::{info, info_span};
 
 type Result<T> = core::result::Result<T, Box<dyn std::error::Error>>;
 
-async fn sleep_rand() {
-    let millis = rand::thread_rng().gen_range(10..200);
-    sleep(Duration::from_millis(millis)).await
-}
-
 #[tokio::test(flavor = "multi_thread")]
-async fn test_n_tasks_random_sleeps() -> Result<()> {
+async fn test_n_tasks_blocking() -> Result<()> {
     let num_clients = 10;
 
     let logs = tracing_forest::capture()
@@ -24,30 +17,21 @@ async fn test_n_tasks_random_sleeps() -> Result<()> {
         .on(async {
             let mut clients = Vec::with_capacity(10);
             for client in 0..num_clients {
-                let handle = tokio::spawn(
-                    async move {
+                let handle = tokio::task::spawn_blocking(move || {
+                    info_span!("connection").in_scope(|| {
                         info!(%client, "new connection");
 
-                        async {
+                        info_span!("request").in_scope(|| {
                             info!(%client, "sent request");
-                            sleep_rand().await;
                             info!(%client, "received response");
-                        }
-                        .instrument(trace_span!("request"))
-                        .await;
+                        });
 
-                        sleep_rand().await;
-
-                        async {
+                        info_span!("response").in_scope(|| {
                             info!(%client, "sending response");
-                            sleep_rand().await;
                             info!(%client, "response sent");
-                        }
-                        .instrument(trace_span!("response"))
-                        .await;
-                    }
-                    .instrument(trace_span!("connection")),
-                );
+                        });
+                    })
+                });
 
                 clients.push(handle);
             }
