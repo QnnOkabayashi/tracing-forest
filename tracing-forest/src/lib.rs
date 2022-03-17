@@ -39,10 +39,35 @@
 //! ```
 //! Then, add [`tracing_forest::init`](crate::init) to your main function:
 //! ```
-//! # #[allow(clippy::needless_doctest_main)]
 //! fn main() {
+//!     // Initialize a default `ForestLayer` subscriber
 //!     tracing_forest::init();
 //!     // ...
+//! }
+//! ```
+//! This crate also provides tools for much more advanced configurations:
+//! ```
+//! use tracing_forest::{Processor, ForestLayer};
+//! use tracing_subscriber::{Registry, layer::SubscriberExt};
+//! use tracing_subscriber::filter::{EnvFilter, LevelFilter};
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     // Send logs to a worker task
+//!     tracing_forest::worker_task()
+//!         .set_global(true)
+//!         .map_sender(|sender| sender.with_stderr_fallback())
+//!         // Arbitrarily construct the layer into a subscriber
+//!         .build_with(|layer: ForestLayer<_, _>| {
+//!             Registry::default()
+//!                 .with(layer)
+//!                 .with(EnvFilter::from_default_env())
+//!                 .with(LevelFilter::INFO)
+//!         })
+//!         .on(async {
+//!             // Code run within the subscriber
+//!         })
+//!         .await;
 //! }
 //! ```
 //! For useful configuration abstractions, see the [`builder` module documentation][builder].
