@@ -325,9 +325,10 @@ where
 
 /// Initializes a global subscriber with a [`ForestLayer`] using the default configuration.
 ///
-/// This function is intended for quick initialization. For more configuration
-/// options, configure a `Subscriber` manually using a `ForestLayer`, or use the
-/// [`worker_task`] function.
+/// This function is intended for quick initialization and processes log trees "inline",
+/// meaning it doesn't take advantage of a worker task for formatting and writing.
+/// To use a worker task, consider using the [`worker_task`] function. Alternatively,
+/// configure a `Subscriber` manually using a `ForestLayer`.
 ///
 /// [`worker_task`]: crate::builder::worker_task
 ///
