@@ -51,5 +51,7 @@ rand = "0.8.4"
 tokio = { version = "1", features = ["full"] }
 serde_json = "1.0"
 
+surf = "2.3"
+
 [package.metadata.docs.rs]
 all-features = true
