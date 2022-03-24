@@ -1,13 +1,13 @@
 use crate::fail;
 use crate::printer::{Pretty, Printer};
-use crate::processor::Processor;
+use crate::processor::{NoProcessor, Processor};
 use crate::tag::{NoTag, Tag, TagParser};
 use crate::tree::{self, FieldSet, Tree};
 #[cfg(feature = "chrono")]
 use chrono::Utc;
 use std::fmt;
 use std::io::{self, Write};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tracing::field::{Field, Visit};
 use tracing::span::{Attributes, Id};
 use tracing::{Event, Subscriber};
@@ -64,19 +64,15 @@ impl OpenedSpan {
             }
         };
 
-        let span = tree::Span {
-            shared: tree::Shared {
-                #[cfg(feature = "chrono")]
-                timestamp: Utc::now(),
-                #[cfg(feature = "uuid")]
-                uuid,
-                level: *attrs.metadata().level(),
-            },
-            name: attrs.metadata().name(),
-            children: Vec::new(),
-            total_duration: Duration::ZERO,
-            inner_duration: Duration::ZERO,
+        let shared = tree::Shared {
+            #[cfg(feature = "chrono")]
+            timestamp: Utc::now(),
+            #[cfg(feature = "uuid")]
+            uuid,
+            level: *attrs.metadata().level(),
         };
+
+        let span = tree::Span::new(shared, attrs.metadata().name());
 
         OpenedSpan {
             span,
@@ -127,6 +123,7 @@ pub struct ForestLayer<P, T> {
 }
 
 impl<P: Processor, T: TagParser> ForestLayer<P, T> {
+    /// Create a new `ForestLayer` from a [`Processor`] and a [`TagParser`].
     pub fn new(processor: P, tag: T) -> Self {
         ForestLayer { processor, tag }
     }
@@ -135,6 +132,13 @@ impl<P: Processor, T: TagParser> ForestLayer<P, T> {
 impl<P: Processor> From<P> for ForestLayer<P, NoTag> {
     fn from(processor: P) -> Self {
         ForestLayer::new(processor, NoTag)
+    }
+}
+
+impl ForestLayer<NoProcessor, NoTag> {
+    /// Create a new `ForestLayer` that does nothing with collected trace data.
+    pub fn sink() -> Self {
+        ForestLayer::from(NoProcessor)
     }
 }
 
@@ -356,9 +360,9 @@ where
 /// ```
 /// Produces the the output:
 /// ```log
-/// INFO     ＿ [info]: Hello, world!
+/// INFO     ｉ [info]: Hello, world!
 /// INFO     my_span [ 26.0µs | 100.000% ]
-/// INFO     ┕━ ＿ [info]: Relevant information
+/// INFO     ┕━ ｉ [info]: Relevant information
 /// ```
 pub fn init() {
     Registry::default().with(ForestLayer::default()).init();
