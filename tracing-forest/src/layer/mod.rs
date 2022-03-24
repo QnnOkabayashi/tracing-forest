@@ -252,11 +252,22 @@ where
     fn on_close(&self, id: Id, ctx: Context<S>) {
         let span_ref = ctx.span(&id).unwrap_or_else(fail::span_not_in_ctx);
 
-        let span = span_ref
+        let mut span = span_ref
             .extensions_mut()
             .remove::<OpenedSpan>()
             .unwrap_or_else(fail::opened_span_not_in_exts)
             .close();
+
+        // Ensure that the total duration is at least as much as the inner
+        // duration. This is caused by when a child span is manually passed
+        // a parent span and then enters without entering the parent span. Also
+        // when a child span is created within a parent, and then stored and
+        // entered again when the parent isn't opened.
+        //
+        // Issue: https://github.com/QnnOkabayashi/tracing-forest/issues/11
+        if span.total_duration < span.inner_duration {
+            span.total_duration = span.inner_duration
+        }
 
         match span_ref.parent() {
             Some(parent) => parent
