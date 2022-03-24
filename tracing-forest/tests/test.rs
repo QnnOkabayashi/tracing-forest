@@ -1,11 +1,13 @@
+#![cfg(test)]
+
 type Result<T> = core::result::Result<T, Box<dyn std::error::Error>>;
 
-#[cfg(feature = "tokio")]
+#[cfg(all(test, feature = "tokio"))]
 mod tokio_tests {
     use rand::Rng;
     use std::future::Future;
     use tokio::time::{sleep, Duration};
-    use tracing::{info, trace, trace_span, Instrument};
+    use tracing::{info, info_span, trace, trace_span, Instrument};
 
     fn do_work() -> impl Future {
         let millis = rand::thread_rng().gen_range(0..200);
@@ -141,6 +143,27 @@ mod tokio_tests {
 
     //     Ok(())
     // }
+
+    #[tokio::test]
+    async fn duration_checked_sub() -> super::Result<()> {
+        let logs = tracing_forest::capture()
+            .build()
+            .on(async {
+                let parent = info_span!("parent");
+                info_span!(parent: &parent, "child").in_scope(|| {
+                    // cursed blocking in async lol
+                    std::thread::sleep(Duration::from_millis(100));
+                });
+            })
+            .await;
+
+        assert!(logs.len() == 1);
+
+        let parent = logs[0].span()?;
+        assert!(parent.total_duration() >= parent.inner_duration());
+
+        Ok(())
+    }
 }
 
 #[cfg(all(feature = "uuid", feature = "tokio"))]
