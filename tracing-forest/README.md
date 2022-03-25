@@ -129,17 +129,17 @@ contextual coherence, providing a clearer view into the sequence of events
 that occurred in each concurrent branch.
 ```log
 INFO     conn [ 150µs | 100.00% ]
-INFO     ┝━ ＿ [info]: step 0 | id: 1
-INFO     ┝━ ＿ [info]: step 1 | id: 1
-INFO     ┕━ ＿ [info]: step 2 | id: 1
+INFO     ┝━ ｉ [info]: step 0 | id: 1
+INFO     ┝━ ｉ [info]: step 1 | id: 1
+INFO     ┕━ ｉ [info]: step 2 | id: 1
 INFO     conn [ 343µs | 100.00% ]
-INFO     ┝━ ＿ [info]: step 0 | id: 0
-INFO     ┝━ ＿ [info]: step 1 | id: 0
-INFO     ┕━ ＿ [info]: step 2 | id: 0
+INFO     ┝━ ｉ [info]: step 0 | id: 0
+INFO     ┝━ ｉ [info]: step 1 | id: 0
+INFO     ┕━ ｉ [info]: step 2 | id: 0
 INFO     conn [ 233µs | 100.00% ]
-INFO     ┝━ ＿ [info]: step 0 | id: 2
-INFO     ┝━ ＿ [info]: step 1 | id: 2
-INFO     ┕━ ＿ [info]: step 2 | id: 2
+INFO     ┝━ ｉ [info]: step 0 | id: 2
+INFO     ┝━ ｉ [info]: step 1 | id: 2
+INFO     ┕━ ｉ [info]: step 2 | id: 2
 ```
 
 ## License
