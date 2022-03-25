@@ -1,5 +1,6 @@
-use crate::cfg_chrono;
 use crate::tree::FieldSet;
+#[cfg(feature = "chrono")]
+use chrono::{DateTime, Utc};
 use serde::ser::{SerializeMap, Serializer};
 use std::time::Duration;
 use tracing::Level;
@@ -20,13 +21,10 @@ pub(crate) fn fields<S: Serializer>(fields: &FieldSet, serializer: S) -> Result<
     model.end()
 }
 
-cfg_chrono! {
-    use chrono::{DateTime, Utc};
-
-    pub(crate) fn timestamp<S: Serializer>(
-        timestamp: &DateTime<Utc>,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&timestamp.to_rfc3339())
-    }
+#[cfg(feature = "chrono")]
+pub(crate) fn timestamp<S: Serializer>(
+    timestamp: &DateTime<Utc>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str(&timestamp.to_rfc3339())
 }

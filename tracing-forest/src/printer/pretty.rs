@@ -28,22 +28,22 @@ use std::fmt::{self, Write};
 ///
 /// An arbitrarily complex example:
 /// ```log
-/// INFO     try_from_entry_ro [ 7.47ms | 6.52% / 100.00% ]
-/// INFO     ┝━ server::internal_search [ 6.98ms | 31.88% / 93.47% ]
-/// INFO     │  ┝━ __ [filter.info]: Some filter info...
-/// INFO     │  ┝━ server::search [ 4.59ms | 0.81% / 61.41% ]
-/// INFO     │  │  ┝━ be::search [ 4.51ms | 0.40% / 60.31% ]
-/// INFO     │  │  │  ┕━ be::search -> filter2idl [ 4.48ms | 22.40% / 59.91% ]
-/// INFO     │  │  │     ┝━ be::idl_arc_sqlite::get_idl [ 571µs | 7.64% ]
-/// INFO     │  │  │     │  ┕━ ＿ [filter.info]: Some filter info...
-/// INFO     │  │  │     ┕━ be::idl_arc_sqlite::get_idl [ 2.23ms | 29.85% ]
-/// ERROR    │  │  │        ┝━ 🚨 [admin.error]: Oh no, an admin error occurred :(
+/// INFO     try_from_entry_ro [ 324µs | 8.47% / 100.00% ]
+/// INFO     ┝━ server::internal_search [ 296µs | 19.02% / 91.53% ]
+/// INFO     │  ┝━ ｉ [filter.info]: Some filter info...
+/// INFO     │  ┝━ server::search [ 226µs | 10.11% / 70.01% ]
+/// INFO     │  │  ┝━ be::search [ 181µs | 6.94% / 55.85% ]
+/// INFO     │  │  │  ┕━ be::search -> filter2idl [ 158µs | 19.65% / 48.91% ]
+/// INFO     │  │  │     ┝━ be::idl_arc_sqlite::get_idl [ 20.4µs | 6.30% ]
+/// INFO     │  │  │     │  ┕━ ｉ [filter.info]: Some filter info...
+/// INFO     │  │  │     ┕━ be::idl_arc_sqlite::get_idl [ 74.3µs | 22.96% ]
+/// ERROR    │  │  │        ┝━ 🚨 [admin.error]: On no, an admin error occurred :(
 /// DEBUG    │  │  │        ┝━ 🐛 [debug]: An untagged debug log
-/// INFO     │  │  │        ┕━ ＿ [admin.info]: there's been a big mistake | alive: false | status: "very sad"
-/// INFO     │  │  ┕━ be::idl_arc_sqlite::get_identry [ 21.4µs | 0.28% ]
-/// INFO     │  │     ┝━ 🔐 [security.critical]: A security critical log
+/// INFO     │  │  │        ┕━ ｉ [admin.info]: there's been a big mistake | alive: false | status: "very sad"
+/// INFO     │  │  ┕━ be::idl_arc_sqlite::get_identry [ 13.1µs | 4.04% ]
+/// ERROR    │  │     ┝━ 🔐 [security.critical]: A security critical log
 /// INFO     │  │     ┕━ 🔓 [security.access]: A security access log
-/// INFO     │  ┕━ server::search<filter_resolve> [ 13.4µs | 0.17% ]
+/// INFO     │  ┕━ server::search<filter_resolve> [ 8.08µs | 2.50% ]
 /// WARN     │     ┕━ 🚧 [filter.warn]: Some filter warning
 /// TRACE    ┕━ 📍 [trace]: Finished!
 /// ```

@@ -104,7 +104,7 @@ impl Tag {
         match level {
             Level::TRACE => Tag::new_custom_level(prefix, "trace", '📍'),
             Level::DEBUG => Tag::new_custom_level(prefix, "debug", '🐛'),
-            Level::INFO => Tag::new_custom_level(prefix, "info", '＿'),
+            Level::INFO => Tag::new_custom_level(prefix, "info", 'ｉ'),
             Level::WARN => Tag::new_custom_level(prefix, "warn", '🚧'),
             Level::ERROR => Tag::new_custom_level(prefix, "error", '🚨'),
         }

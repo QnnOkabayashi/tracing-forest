@@ -43,6 +43,7 @@ pub enum Tree {
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Event {
     /// Shared fields between events and spans.
+    #[cfg_attr(feature = "serde", serde(flatten))]
     pub(crate) shared: Shared,
 
     /// The message associated with the event.
@@ -61,13 +62,11 @@ pub struct Event {
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct Span {
     /// Shared fields between events and spans.
+    #[cfg_attr(feature = "serde", serde(flatten))]
     pub(crate) shared: Shared,
 
     /// The name of the span.
     pub(crate) name: &'static str,
-
-    /// Events and spans collected while the span was open.
-    pub(crate) children: Vec<Tree>,
 
     /// The total duration the span was open for.
     #[cfg_attr(
@@ -82,6 +81,9 @@ pub struct Span {
         serde(rename = "nanos_nested", serialize_with = "ser::nanos")
     )]
     pub(crate) inner_duration: Duration,
+
+    /// Events and spans collected while the span was open.
+    pub(crate) children: Vec<Tree>,
 }
 
 #[derive(Clone, Debug)]
@@ -214,6 +216,16 @@ impl Event {
 }
 
 impl Span {
+    pub(crate) fn new(shared: Shared, name: &'static str) -> Self {
+        Span {
+            shared,
+            name,
+            total_duration: Duration::ZERO,
+            inner_duration: Duration::ZERO,
+            children: Vec::new(),
+        }
+    }
+
     cfg_uuid! {
         /// Returns the span's [`Uuid`].
         pub fn uuid(&self) -> Uuid {
