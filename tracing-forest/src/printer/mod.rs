@@ -50,6 +50,7 @@ pub trait Formatter {
     /// Stringifies the `Tree`, or returns an error.
     ///
     /// # Errors
+    ///
     /// If the `Tree` cannot be formatted to a string, an error is returned.
     fn fmt(&self, tree: &Tree) -> Result<String, Self::Error>;
 }

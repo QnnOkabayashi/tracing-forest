@@ -28,6 +28,7 @@ pub trait Processor: 'static + Sized {
     /// or anything else.
     ///
     /// # Errors
+    ///
     /// If the `Tree` cannot be processed, then a [`ProcessReport`] is returned
     /// which may or may not be recoverable with a [fallback].
     ///
