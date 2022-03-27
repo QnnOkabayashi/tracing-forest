@@ -106,6 +106,10 @@ pub(crate) struct Shared {
 impl Tree {
     /// Returns a reference to the inner [`Event`] if the tree is an event.
     ///
+    /// # Errors
+    ///
+    /// This function returns an error if the `Tree` contains the `Span` variant.
+    ///
     /// # Examples
     ///
     /// Inspecting a `Tree` returned from [`capture`]:
@@ -140,6 +144,10 @@ impl Tree {
     }
 
     /// Returns a reference to the inner [`Span`] if the tree is a span.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the `Tree` contains the `Event` variant.
     ///
     /// # Examples
     ///

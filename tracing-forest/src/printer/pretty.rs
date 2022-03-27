@@ -58,7 +58,7 @@ impl Formatter for Pretty {
     fn fmt(&self, tree: &Tree) -> Result<String, fmt::Error> {
         let mut writer = String::with_capacity(256);
 
-        self.format_tree(tree, None, &mut Vec::with_capacity(16), &mut writer)?;
+        Pretty::format_tree(tree, None, &mut Vec::with_capacity(16), &mut writer)?;
 
         Ok(writer)
     }
@@ -66,7 +66,6 @@ impl Formatter for Pretty {
 
 impl Pretty {
     fn format_tree(
-        &self,
         tree: &Tree,
         duration_root: Option<f64>,
         indent: &mut Vec<Indent>,
@@ -74,19 +73,19 @@ impl Pretty {
     ) -> fmt::Result {
         match tree {
             Tree::Event(event) => {
-                self.format_shared(&event.shared, writer)?;
-                self.format_indent(indent, writer)?;
-                self.format_event(event, writer)
+                Pretty::format_shared(&event.shared, writer)?;
+                Pretty::format_indent(indent, writer)?;
+                Pretty::format_event(event, writer)
             }
             Tree::Span(span) => {
-                self.format_shared(&span.shared, writer)?;
-                self.format_indent(indent, writer)?;
-                self.format_span(span, duration_root, indent, writer)
+                Pretty::format_shared(&span.shared, writer)?;
+                Pretty::format_indent(indent, writer)?;
+                Pretty::format_span(span, duration_root, indent, writer)
             }
         }
     }
 
-    fn format_shared(&self, shared: &Shared, writer: &mut String) -> fmt::Result {
+    fn format_shared(shared: &Shared, writer: &mut String) -> fmt::Result {
         #[cfg(feature = "uuid")]
         write!(writer, "{} ", shared.uuid)?;
 
@@ -96,14 +95,14 @@ impl Pretty {
         write!(writer, "{:<8} ", shared.level)
     }
 
-    fn format_indent(&self, indent: &mut Vec<Indent>, writer: &mut String) -> fmt::Result {
+    fn format_indent(indent: &mut Vec<Indent>, writer: &mut String) -> fmt::Result {
         for indent in indent.iter() {
             writer.write_str(indent.repr())?;
         }
         Ok(())
     }
 
-    fn format_event(&self, event: &Event, writer: &mut String) -> fmt::Result {
+    fn format_event(event: &Event, writer: &mut String) -> fmt::Result {
         let tag = event.tag();
         let message = event.message().unwrap_or("");
 
@@ -117,7 +116,6 @@ impl Pretty {
     }
 
     fn format_span(
-        &self,
         span: &Span,
         duration_root: Option<f64>,
         indent: &mut Vec<Indent>,
@@ -156,13 +154,13 @@ impl Pretty {
                 if let Some(edge) = indent.last_mut() {
                     *edge = Indent::Fork;
                 }
-                self.format_tree(tree, Some(root_duration), indent, writer)?;
+                Pretty::format_tree(tree, Some(root_duration), indent, writer)?;
             }
 
             if let Some(edge) = indent.last_mut() {
                 *edge = Indent::Turn;
             }
-            self.format_tree(last, Some(root_duration), indent, writer)?;
+            Pretty::format_tree(last, Some(root_duration), indent, writer)?;
 
             indent.pop();
         }

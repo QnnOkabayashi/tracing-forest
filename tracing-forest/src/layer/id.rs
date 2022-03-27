@@ -166,7 +166,7 @@ const HEX_TABLE: &[u8; 256] = &{
             break buf;
         }
 
-        i += 1
+        i += 1;
     }
 };
 

@@ -26,6 +26,13 @@ pub trait Processor: 'static + Sized {
     /// Processes the [`Tree`] of logs. This can mean many things, such as writing
     /// to stdout or a file, sending over a network, storing in memory, ignoring,
     /// or anything else.
+    ///
+    /// # Errors
+    ///
+    /// If the `Tree` cannot be processed, then a [`ProcessReport`] is returned
+    /// which may or may not be recoverable with a [fallback].
+    ///
+    /// [fallback]: Processor::with_fallback
     fn process(&self, tree: Tree) -> Result<(), ProcessReport>;
 
     /// Returns a `Processor` that first attempts processing with `self`, and
@@ -55,8 +62,8 @@ pub trait Processor: 'static + Sized {
     }
 
     /// Returns a `Processor` that silently fails if `self` fails to process.
-    fn with_ignore_fallback(self) -> WithFallback<Self, NoProcessor> {
-        self.with_fallback(NoProcessor)
+    fn with_ignore_fallback(self) -> WithFallback<Self, Sink> {
+        self.with_fallback(Sink)
     }
 }
 
@@ -85,9 +92,9 @@ where
 ///
 /// This processor cannot fail.
 #[derive(Debug)]
-pub struct NoProcessor;
+pub struct Sink;
 
-impl Processor for NoProcessor {
+impl Processor for Sink {
     fn process(&self, _tree: Tree) -> Result<(), ProcessReport> {
         Ok(())
     }

@@ -35,6 +35,7 @@ cfg_uuid! {
     }
 }
 
+#[allow(clippy::needless_pass_by_value)]
 #[cold]
 #[inline(never)]
 pub fn processing_error(report: ProcessReport) {

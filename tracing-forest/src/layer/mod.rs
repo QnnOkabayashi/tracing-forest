@@ -1,6 +1,6 @@
 use crate::fail;
 use crate::printer::{Pretty, Printer};
-use crate::processor::{NoProcessor, Processor};
+use crate::processor::{Processor, Sink};
 use crate::tag::{NoTag, Tag, TagParser};
 use crate::tree::{self, FieldSet, Tree};
 #[cfg(feature = "chrono")]
@@ -100,12 +100,12 @@ impl OpenedSpan {
             event
         };
 
-        self.span.children.push(Tree::Event(event))
+        self.span.children.push(Tree::Event(event));
     }
 
     fn record_span(&mut self, span: tree::Span) {
         self.span.inner_duration += span.total_duration();
-        self.span.children.push(Tree::Span(span))
+        self.span.children.push(Tree::Span(span));
     }
 
     #[cfg(feature = "uuid")]
@@ -135,10 +135,10 @@ impl<P: Processor> From<P> for ForestLayer<P, NoTag> {
     }
 }
 
-impl ForestLayer<NoProcessor, NoTag> {
+impl ForestLayer<Sink, NoTag> {
     /// Create a new `ForestLayer` that does nothing with collected trace data.
     pub fn sink() -> Self {
-        ForestLayer::from(NoProcessor)
+        ForestLayer::from(Sink)
     }
 }
 
@@ -270,7 +270,7 @@ where
         //
         // Issue: https://github.com/QnnOkabayashi/tracing-forest/issues/11
         if span.total_duration < span.inner_duration {
-            span.total_duration = span.inner_duration
+            span.total_duration = span.inner_duration;
         }
 
         match span_ref.parent() {

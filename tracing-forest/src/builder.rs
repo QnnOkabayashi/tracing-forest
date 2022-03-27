@@ -479,10 +479,9 @@ where
         let handle = tokio::spawn(async move {
             loop {
                 tokio::select! {
-                    Some(tree) = receiver.recv() => {
-                        processor.process(tree).unwrap_or_else(fail::processing_error);
-                    }
+                    Some(tree) = receiver.recv() => processor.process(tree).unwrap_or_else(fail::processing_error),
                     Ok(()) = &mut shutdown_rx => break,
+                    else => break,
                 }
             }
 
@@ -504,9 +503,9 @@ where
 
         f.await;
 
-        shutdown_tx.send(()).expect("Shutdown signal couldn't send, this is a bug.");
+        shutdown_tx.send(()).expect("Shutdown signal couldn't send, this is a bug");
 
-        handle.await.expect("Failed to join the writing task, this is a bug.");
+        handle.await.expect("Failed to join the writing task, this is a bug");
     }
 }
 
@@ -516,10 +515,7 @@ where
 {
     /// Execute a future in the context of the configured subscriber, and return
     /// a `Vec<Tree>` of generated logs.
-    pub async fn on<F>(mut self, f: F) -> Vec<Tree>
-    where
-        F: Future<Output = ()>,
-    {
+    pub async fn on(mut self, f: impl Future<Output = ()>) -> Vec<Tree> {
         {
             let _guard = if self.is_global {
                 tracing::subscriber::set_global_default(self.subscriber)

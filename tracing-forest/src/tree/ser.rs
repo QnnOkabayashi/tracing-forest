@@ -5,6 +5,7 @@ use serde::ser::{SerializeMap, Serializer};
 use std::time::Duration;
 use tracing::Level;
 
+#[allow(clippy::trivially_copy_pass_by_ref)]
 pub(crate) fn level<S: Serializer>(level: &Level, serializer: S) -> Result<S::Ok, S::Error> {
     serializer.serialize_str(level.as_str())
 }
