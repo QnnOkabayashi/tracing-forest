@@ -281,10 +281,6 @@
     // Fail the docs build if any intra-docs links are broken
     deny(rustdoc::broken_intra_doc_links),
 )]
-#![warn(clippy::pedantic)]
-#![allow(clippy::return_self_not_must_use)]
-#![allow(clippy::must_use_candidate)]
-#![allow(clippy::module_name_repetitions)]
 pub mod printer;
 pub mod processor;
 pub mod tag;
