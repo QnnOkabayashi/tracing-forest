@@ -35,13 +35,13 @@ impl OpenedSpan {
 
             attrs.record(&mut |field: &Field, value: &dyn fmt::Debug| {
                 if field.name() == "uuid" && maybe_uuid.is_none() {
-                    #[cfg(feature = "smallvec")]
-                    let mut buf = smallvec::SmallVec::<[u8; 64]>::new();
-                    #[cfg(not(feature = "smallvec"))]
-                    let mut buf = Vec::with_capacity(64);
+                    const SIZE: usize = 64;
+                    let mut buf = [0u8; SIZE];
+                    let mut remaining = &mut buf[..];
 
-                    if let Ok(()) = write!(buf, "{:?}", value) {
-                        if let Ok(parsed) = id::try_parse(&buf[..]) {
+                    if let Ok(()) = write!(remaining, "{:?}", value) {
+                        let len = SIZE - remaining.len();
+                        if let Ok(parsed) = id::try_parse(&buf[..len]) {
                             maybe_uuid = Some(parsed);
                         }
                     }
