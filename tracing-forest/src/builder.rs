@@ -109,6 +109,7 @@ use crate::tag::{TagParser, NoTag};
 use crate::processor::{Processor, WithFallback, ProcessReport};
 use crate::sealed::Sealed;
 use std::future::Future;
+use std::iter::from_fn;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::sync::oneshot;
 use tracing::Subscriber;
@@ -133,11 +134,10 @@ use tracing_subscriber::layer::{Layer, Layered};
 /// [`set_global`]: LayerBuilder::set_global
 pub fn worker_task() -> LayerBuilder<TreeSender, Process<StdoutPrinter>, NoTag> {
     let (sender_processor, receiver) = mpsc::unbounded_channel();
-    let receiver_processor = Process(Printer::default());
 
     LayerBuilder {
         sender_processor: TreeSender(sender_processor),
-        worker_processor: receiver_processor,
+        worker_processor: Process(Printer::default()),
         receiver,
         tag: NoTag,
         is_global: false,
@@ -515,7 +515,7 @@ where
 {
     /// Execute a future in the context of the configured subscriber, and return
     /// a `Vec<Tree>` of generated logs.
-    pub async fn on(mut self, f: impl Future<Output = ()>) -> Vec<Tree> {
+    pub async fn on(self, f: impl Future<Output = ()>) -> Vec<Tree> {
         {
             let _guard = if self.is_global {
                 tracing::subscriber::set_global_default(self.subscriber)
@@ -528,14 +528,10 @@ where
             f.await;
         }
 
-        self.receiver.close();
+        let mut receiver = self.receiver;
 
-        let mut logs = Vec::with_capacity(32);
+        receiver.close();
 
-        while let Some(tree) = self.receiver.recv().await {
-            logs.push(tree);
-        }
-
-        logs
+        from_fn(|| receiver.try_recv().ok()).collect()
     }
 }

@@ -95,8 +95,8 @@ impl Pretty {
         write!(writer, "{:<8} ", shared.level)
     }
 
-    fn format_indent(indent: &mut Vec<Indent>, writer: &mut String) -> fmt::Result {
-        for indent in indent.iter() {
+    fn format_indent(indent: &[Indent], writer: &mut String) -> fmt::Result {
+        for indent in indent {
             writer.write_str(indent.repr())?;
         }
         Ok(())
