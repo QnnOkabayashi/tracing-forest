@@ -1,11 +1,11 @@
 use tracing::{debug, error, info, info_span, trace, warn, Level};
-use tracing_forest::{tag::Tag, ForestLayer, Printer};
+use tracing_forest::{tag, ForestLayer, Printer};
 use tracing_subscriber::{Layer, Registry};
 
 #[test]
 #[ignore]
 fn test_manual_with_json() {
-    let processor = Printer::from_formatter(serde_json::to_string_pretty);
+    let processor = Printer::new().formatter(serde_json::to_string_pretty);
     let layer = ForestLayer::from(processor);
     let subscriber = layer.with_subscriber(Registry::default());
     tracing::subscriber::with_default(subscriber, || {
@@ -23,14 +23,11 @@ fn pretty_example() {
         let layer = ForestLayer::new(Printer::default(), |event: &tracing::Event| {
             let level = *event.metadata().level();
             let target = event.metadata().target();
-            match (target, level) {
-                ("security", Level::ERROR) => {
-                    Some(Tag::new_custom_level(Some(target), "critical", '🔐'))
-                }
-                ("security", Level::INFO) => {
-                    Some(Tag::new_custom_level(Some(target), "access", '🔓'))
-                }
-                ("admin" | "request" | "filter", _) => Some(Tag::new(Some(target), level)),
+
+            match target {
+                "security" if level == Level::ERROR => Some(tag!('🔐'[security.critical])),
+                "security" if level == Level::INFO => Some(tag!('🔓'[security.access])), // <- idents
+                "admin" | "request" | "filter" => Some(tag!(target, level)), // <- exprs
                 _ => None,
             }
         });

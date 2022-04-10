@@ -1,4 +1,4 @@
-//! Provide supplemental information to events.
+//! Provide categorical information to events.
 //!
 //! # Use cases for tags
 //!
@@ -15,11 +15,15 @@
 //! formatting events, and the [`TagParser`] trait, which allows Tracing events to
 //! be parsed to return `Option<Tag>`.
 //!
+//! Additionally, the [`tag!`] macro provides syntactic sugar for creating more
+//! customized tags.
+//!
 //! ## Examples
+//!
 //! Declaring and using a custom `TagParser`.
 //! ```
 //! use tracing::{info, error, Event, Level};
-//! use tracing_forest::tag::Tag;
+//! use tracing_forest::{tag, Tag};
 //!
 //! // `TagParser` is implemented for all `Fn(&tracing::Event) -> Option<Tag>`,
 //! // so a top-level `fn` can be used.
@@ -31,10 +35,8 @@
 //!     let level = *event.metadata().level();
 //!
 //!     match target {
-//!         "security" if level == Level::ERROR => {
-//!             Some(Tag::new_custom_level(Some(target), "critical", '🔐'))
-//!         }
-//!         "admin" | "request" => Some(Tag::new(Some(target), level)),
+//!         "security" if level == Level::ERROR => Some(tag!('🔐' [security.critical])),
+//!         "admin" | "request" => Some(tag!(target, level)),
 //!         _ => None,
 //!     }
 //! }
@@ -56,20 +58,48 @@
 //! }
 //! ```
 //! ```log
-//! INFO     ＿ [admin.info]: some info for the admin
+//! INFO     ｉ [admin.info]: some info for the admin
 //! ERROR    🚨 [request.error]: the request timed out
 //! ERROR    🔐 [security.critical]: the db has been breached
-//! INFO     ＿ [info]: no tags here
+//! INFO     ｉ [info]: no tags here
 //! ```
-//!
 use crate::cfg_serde;
 use std::fmt;
 use tracing::{Event, Level};
 
+/// A utility macro that enables easily defining customized [`Tag`]s.
+///
+/// # Examples
+///
+/// ```
+/// use tracing_forest::{tag, Tag};
+/// use tracing::{Event, Level};
+///
+/// fn kanidm_tag(event: &Event) -> Option<Tag> {
+///     let target = event.metadata().target();
+///     let level = *event.metadata().level();
+///
+///     match target {
+///         "security" if level == Level::ERROR => Some(tag!('🔐' [security.critical])),
+///         "admin" | "request" => Some(tag!(target, level)),
+///         _ => None,
+///     }
+/// }
+/// ```
+#[macro_export]
+macro_rules! tag {
+    ($icon:literal [$prefix:ident.$suffix:ident]) => {
+        $crate::Tag::new(Some(stringify!($prefix)), stringify!($suffix), $icon)
+    };
+    ($prefix:expr, $level:expr) => {
+        $crate::Tag::new_from_level(Some($prefix), $level)
+    };
+}
+
 /// A type containing categorical information about where an event occurred.
 ///
-/// See the [module-level documentation](crate::tag) for more details.
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+/// See the [module-level documentation](mod@crate::tag) for more details.
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct Tag {
     /// Optional prefix for the tag message
     prefix: Option<&'static str>,
@@ -78,7 +108,7 @@ pub struct Tag {
     ///
     /// This value isn't necessarily "trace", "debug", "info", "warn", or "error",
     /// and can be customized.
-    level: &'static str,
+    suffix: &'static str,
 
     /// An icon, typically emoji, that represents the tag.
     icon: char,
@@ -87,32 +117,41 @@ pub struct Tag {
 impl Tag {
     /// Returns a `Tag` constructed from an optional prefix and a custom level
     /// and icon.
-    pub const fn new_custom_level(
-        prefix: Option<&'static str>,
-        level: &'static str,
-        icon: char,
-    ) -> Self {
+    ///
+    /// If a prefix is provided, pretty-printing looks like this:
+    /// ```log
+    /// <icon> [<prefix>.<suffix>]
+    /// ```
+    /// Otherwise, it looks like this:
+    /// ```log
+    /// <icon> [<suffix>]
+    /// ```
+    pub const fn new(prefix: Option<&'static str>, suffix: &'static str, icon: char) -> Self {
         Tag {
             prefix,
-            level,
+            suffix,
             icon,
         }
     }
 
     /// Returns a `Tag` constructed from an optional prefix and a level.
-    pub const fn new(prefix: Option<&'static str>, level: Level) -> Self {
+    ///
+    /// If a prefix is provided, pretty-printing looks like this:
+    /// ```log
+    /// <DEFAULT_LEVEL_ICON> [<prefix>.<level>]
+    /// ```
+    /// Otherwise, it looks like this:
+    /// ```log
+    /// <DEFAULT_LEVEL_ICON> [<level>]
+    /// ```
+    pub const fn new_from_level(prefix: Option<&'static str>, level: Level) -> Self {
         match level {
-            Level::TRACE => Tag::new_custom_level(prefix, "trace", '📍'),
-            Level::DEBUG => Tag::new_custom_level(prefix, "debug", '🐛'),
-            Level::INFO => Tag::new_custom_level(prefix, "info", 'ｉ'),
-            Level::WARN => Tag::new_custom_level(prefix, "warn", '🚧'),
-            Level::ERROR => Tag::new_custom_level(prefix, "error", '🚨'),
+            Level::TRACE => Tag::new(prefix, "trace", '📍'),
+            Level::DEBUG => Tag::new(prefix, "debug", '🐛'),
+            Level::INFO => Tag::new(prefix, "info", 'ｉ'),
+            Level::WARN => Tag::new(prefix, "warn", '🚧'),
+            Level::ERROR => Tag::new(prefix, "error", '🚨'),
         }
-    }
-
-    /// Returns a `Tag` constructed from a `Level` and no prefix.
-    pub const fn new_level(level: Level) -> Self {
-        Tag::new(None, level)
     }
 
     /// Returns the `Tag`'s icon for printing.
@@ -124,28 +163,16 @@ impl Tag {
 impl fmt::Display for Tag {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(prefix) = self.prefix {
-            write!(f, "{}.{}", prefix, self.level)
+            write!(f, "{}.{}", prefix, self.suffix)
         } else {
-            f.write_str(self.level)
+            self.suffix.fmt(f)
         }
     }
 }
 
 impl From<Level> for Tag {
     fn from(level: Level) -> Self {
-        Tag::new_level(level)
-    }
-}
-
-impl PartialEq<str> for Tag {
-    fn eq(&self, other: &str) -> bool {
-        match self.prefix {
-            Some(prefix) => other
-                .strip_prefix(prefix)
-                .and_then(|s| s.strip_prefix('.'))
-                .map_or(false, |s| s == self.level),
-            None => other == self.level,
-        }
+        Tag::new_from_level(None, level)
     }
 }
 
@@ -165,7 +192,7 @@ cfg_serde! {
 /// This trait is blanket-implemented for all `Fn(&tracing::Event) -> Option<Tag>`,
 /// so top-level `fn`s can be used.
 ///
-/// See the [module-level documentation](crate::tag) for more details.
+/// See the [module-level documentation](mod@crate::tag) for more details.
 pub trait TagParser: 'static {
     /// Parse a tag from a [`tracing::Event`]
     fn try_parse(&self, event: &Event) -> Option<Tag>;
