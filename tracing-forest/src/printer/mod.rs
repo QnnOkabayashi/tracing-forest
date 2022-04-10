@@ -1,5 +1,5 @@
 //! Utilities for formatting and writing trace trees.
-use crate::processor::{ProcessReport, Processor};
+use crate::processor::{self, Processor};
 use crate::tree::Tree;
 use std::error::Error;
 use std::io::{self, Write};
@@ -21,7 +21,7 @@ pub use pretty::Pretty;
 /// # async fn main() {
 /// tracing_forest::worker_task()
 ///     .map_receiver(|receiver| {
-///         receiver.set_formatter(serde_json::to_string_pretty)
+///         receiver.formatter(serde_json::to_string_pretty)
 ///     })
 ///     .build()
 ///     .on(async {
@@ -75,65 +75,84 @@ pub struct Printer<S, W> {
     make_writer: W,
 }
 
-pub type StdoutPrinter = Printer<Pretty, fn() -> io::Stdout>;
+/// A [`MakeWriter`] that writes to stdout.
+///
+/// This is functionally the same as using [`std::io::stdout`] as a `MakeWriter`,
+/// except it has a named type and can therefore be used in type signatures.
+#[derive(Debug)]
+pub struct MakeStdout;
 
-pub type StderrPrinter = Printer<Pretty, fn() -> io::Stderr>;
+/// A [`MakeWriter`] that writes to stderr.
+///
+/// This is functionally the same as using [`std::io::stderr`] as a `MakeWriter`,
+/// except it has a named type and can therefore be used in type signatures.
+#[derive(Debug)]
+pub struct MakeStderr;
+
+impl<'a> MakeWriter<'a> for MakeStdout {
+    type Writer = io::Stdout;
+
+    fn make_writer(&self) -> Self::Writer {
+        io::stdout()
+    }
+}
+
+impl<'a> MakeWriter<'a> for MakeStderr {
+    type Writer = io::Stderr;
+
+    fn make_writer(&self) -> Self::Writer {
+        io::stderr()
+    }
+}
+
+/// A [`Processor`] that pretty-prints to stdout.
+pub type PrettyPrinter = Printer<Pretty, MakeStdout>;
+
+impl Printer<Pretty, MakeStdout> {
+    /// Returns a new [`Printer`] that pretty-prints to stdout.
+    ///
+    /// Use [`Printer::formatter`] and [`Printer::writer`] for custom configuration.
+    pub const fn new() -> Self {
+        Printer {
+            formatter: Pretty,
+            make_writer: MakeStdout,
+        }
+    }
+}
 
 impl<F, W> Printer<F, W>
 where
     F: 'static + Formatter,
     W: 'static + for<'a> MakeWriter<'a>,
 {
-    /// Returns a new [`Printer`].
-    pub fn new(formatter: F, make_writer: W) -> Self {
-        Printer {
-            formatter,
-            make_writer,
-        }
-    }
-
     /// Set the formatter.
-    pub fn set_formatter<F2>(self, formatter: F2) -> Printer<F2, W>
+    ///
+    /// See the [`Formatter`] trait for details on possible inputs.
+    pub fn formatter<F2>(self, formatter: F2) -> Printer<F2, W>
     where
         F2: 'static + Formatter,
     {
-        Printer::new(formatter, self.make_writer)
+        Printer {
+            formatter,
+            make_writer: self.make_writer,
+        }
     }
 
     /// Set the writer.
-    pub fn set_writer<W2>(self, make_writer: W2) -> Printer<F, W2>
+    pub fn writer<W2>(self, make_writer: W2) -> Printer<F, W2>
     where
         W2: 'static + for<'a> MakeWriter<'a>,
     {
-        Printer::new(self.formatter, make_writer)
+        Printer {
+            formatter: self.formatter,
+            make_writer,
+        }
     }
 }
 
-impl<F> Printer<F, fn() -> io::Stdout>
-where
-    F: 'static + Formatter,
-{
-    /// Returns a new [`Printer`] from a [`Formatter`], defaulting to writing to
-    /// stdout.
-    pub fn from_formatter(formatter: F) -> Self {
-        Printer::new(formatter, io::stdout)
-    }
-}
-
-impl<W> Printer<Pretty, W>
-where
-    W: 'static + for<'a> MakeWriter<'a>,
-{
-    /// Returns a new [`Printer`] from a [`MakeWriter`], defaulting to pretty
-    /// printing.
-    pub fn from_make_writer(make_writer: W) -> Self {
-        Printer::new(Pretty::default(), make_writer)
-    }
-}
-
-impl Default for Printer<Pretty, fn() -> io::Stdout> {
+impl Default for Printer<Pretty, MakeStdout> {
     fn default() -> Self {
-        Printer::new(Pretty::default(), io::stdout)
+        Printer::new()
     }
 }
 
@@ -142,15 +161,15 @@ where
     F: 'static + Formatter,
     W: 'static + for<'a> MakeWriter<'a>,
 {
-    fn process(&self, tree: Tree) -> Result<(), ProcessReport> {
-        let buf = match self.formatter.fmt(&tree) {
-            Ok(buf) => buf,
-            Err(e) => return Err(ProcessReport::new(Some(tree), e.into())),
+    fn process(&self, tree: Tree) -> processor::Result {
+        let string = match self.formatter.fmt(&tree) {
+            Ok(s) => s,
+            Err(e) => return Err((tree, e.into())),
         };
 
-        match self.make_writer.make_writer().write_all(buf.as_bytes()) {
+        match self.make_writer.make_writer().write_all(string.as_bytes()) {
             Ok(()) => Ok(()),
-            Err(e) => Err(ProcessReport::new(Some(tree), e.into())),
+            Err(e) => Err((tree, e.into())),
         }
     }
 }

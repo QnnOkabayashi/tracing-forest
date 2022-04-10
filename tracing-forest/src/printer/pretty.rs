@@ -2,6 +2,11 @@ use crate::printer::Formatter;
 use crate::tree::{Event, Shared, Span, Tree};
 use std::fmt::{self, Write};
 
+#[cfg(feature = "smallvec")]
+type IndentVec = smallvec::SmallVec<[Indent; 64]>;
+#[cfg(not(feature = "smallvec"))]
+type IndentVec = Vec<Indent>;
+
 /// Format logs for pretty printing.
 ///
 /// # Interpreting span times
@@ -47,10 +52,8 @@ use std::fmt::{self, Write};
 /// WARN     │     ┕━ 🚧 [filter.warn]: Some filter warning
 /// TRACE    ┕━ 📍 [trace]: Finished!
 /// ```
-#[derive(Debug, Default)]
-pub struct Pretty {
-    _priv: (),
-}
+#[derive(Debug)]
+pub struct Pretty;
 
 impl Formatter for Pretty {
     type Error = fmt::Error;
@@ -58,7 +61,7 @@ impl Formatter for Pretty {
     fn fmt(&self, tree: &Tree) -> Result<String, fmt::Error> {
         let mut writer = String::with_capacity(256);
 
-        Pretty::format_tree(tree, None, &mut Vec::with_capacity(16), &mut writer)?;
+        Pretty::format_tree(tree, None, &mut IndentVec::new(), &mut writer)?;
 
         Ok(writer)
     }
@@ -68,7 +71,7 @@ impl Pretty {
     fn format_tree(
         tree: &Tree,
         duration_root: Option<f64>,
-        indent: &mut Vec<Indent>,
+        indent: &mut IndentVec,
         writer: &mut String,
     ) -> fmt::Result {
         match tree {
@@ -118,7 +121,7 @@ impl Pretty {
     fn format_span(
         span: &Span,
         duration_root: Option<f64>,
-        indent: &mut Vec<Indent>,
+        indent: &mut IndentVec,
         writer: &mut String,
     ) -> fmt::Result {
         let total_duration = span.total_duration().as_nanos() as f64;

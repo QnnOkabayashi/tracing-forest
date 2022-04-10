@@ -102,11 +102,11 @@
 //! 
 //! For full configuration options, see the [`LayerBuilder`] documentation.
 use crate::layer::ForestLayer;
-use crate::printer::{Printer, StdoutPrinter};
+use crate::printer::{Printer, PrettyPrinter};
 use crate::tree::Tree;
 use crate::fail;
 use crate::tag::{TagParser, NoTag};
-use crate::processor::{Processor, WithFallback, ProcessReport};
+use crate::processor::{self, Processor, WithFallback};
 use crate::sealed::Sealed;
 use std::future::Future;
 use std::iter::from_fn;
@@ -132,12 +132,12 @@ use tracing_subscriber::layer::{Layer, Layered};
 /// 
 /// [nonblocking-processing]: crate::builder#nonblocking-log-processing-with-worker_task
 /// [`set_global`]: LayerBuilder::set_global
-pub fn worker_task() -> LayerBuilder<TreeSender, Process<StdoutPrinter>, NoTag> {
+pub fn worker_task() -> LayerBuilder<TreeSender, Process<PrettyPrinter>, NoTag> {
     let (sender_processor, receiver) = mpsc::unbounded_channel();
 
     LayerBuilder {
         sender_processor: TreeSender(sender_processor),
-        worker_processor: Process(Printer::default()),
+        worker_processor: Process(Printer::new()),
         receiver,
         tag: NoTag,
         is_global: false,
@@ -217,7 +217,7 @@ pub struct Process<P>(P);
 pub struct TreeSender(UnboundedSender<Tree>);
 
 impl Processor for TreeSender {
-    fn process(&self, tree: Tree) -> Result<(), ProcessReport> {
+    fn process(&self, tree: Tree) -> processor::Result {
         self.0.process(tree)
     }
 }
@@ -247,16 +247,16 @@ where
     /// ```no_run
     /// # #[tokio::main(flavor = "current_thread")]
     /// # async fn main() {
-    /// use tracing_forest::{Printer, Processor};
+    /// use tracing_forest::Processor;
     /// use std::fs::File;
     /// 
     /// let out = File::create("out.log").unwrap();
     /// 
     /// tracing_forest::worker_task()
-    ///     .map_receiver(|_| { // Ignore the default receiving processor
-    ///         Printer::from_make_writer(out)
-    ///             .with_stderr_fallback()
-    ///     })
+    ///     .map_receiver(|printer| printer
+    ///         .writer(out)
+    ///         .or_stderr()
+    ///     )
     ///     .build()
     ///     .on(async {
     ///         // ...
@@ -297,7 +297,7 @@ where
     /// use tracing_forest::Processor;
     /// 
     /// tracing_forest::worker_task()
-    ///     .map_sender(|sender| sender.with_stderr_fallback())
+    ///     .map_sender(|sender| sender.or_stderr())
     ///     .build()
     ///     .on(async {
     /// #       mod tokio {
@@ -323,7 +323,7 @@ where
     /// 
     /// Since dropping the sender half would make the receiver task useless, this
     /// method uses traits to enforce at compile time that the function returns
-    /// some derivative of the sender. Currently, the only accepted wrapping is
+    /// some derivation of the sender. Currently, the only accepted wrapping is
     /// through adding a fallback.
     /// ```compile_fail
     /// # use tracing_forest::processor::Printer;

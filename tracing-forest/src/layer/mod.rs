@@ -1,5 +1,5 @@
 use crate::fail;
-use crate::printer::{Pretty, Printer};
+use crate::printer::{PrettyPrinter, Printer};
 use crate::processor::{Processor, Sink};
 use crate::tag::{NoTag, Tag, TagParser};
 use crate::tree::{self, FieldSet, Tree};
@@ -142,7 +142,7 @@ impl ForestLayer<Sink, NoTag> {
     }
 }
 
-impl Default for ForestLayer<Printer<Pretty, fn() -> io::Stdout>, NoTag> {
+impl Default for ForestLayer<PrettyPrinter, NoTag> {
     fn default() -> Self {
         ForestLayer {
             processor: Printer::default(),
