@@ -1,4 +1,6 @@
-use crate::{cfg_uuid, processor::ProcessReport};
+use crate::cfg_uuid;
+use crate::tree::Tree;
+use std::error::Error;
 
 #[cold]
 #[inline(never)]
@@ -38,6 +40,6 @@ cfg_uuid! {
 #[allow(clippy::needless_pass_by_value)]
 #[cold]
 #[inline(never)]
-pub fn processing_error(report: ProcessReport) {
-    panic!("Processing logs failed: {}", report);
+pub fn processing_error((_, err): (Tree, Box<dyn Error + Send + Sync>)) {
+    panic!("Processing logs failed: {}", err);
 }
