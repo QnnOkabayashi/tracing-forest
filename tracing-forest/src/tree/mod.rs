@@ -139,7 +139,7 @@ impl Tree {
     pub fn event(&self) -> Result<&Event, ExpectedEventError> {
         match self {
             Tree::Event(event) => Ok(event),
-            Tree::Span(_) => Err(ExpectedEventError(())),
+            Tree::Span(_) => Err(ExpectedEventError),
         }
     }
 
@@ -178,7 +178,7 @@ impl Tree {
     /// [`capture`]: crate::builder::capture
     pub fn span(&self) -> Result<&Span, ExpectedSpanError> {
         match self {
-            Tree::Event(_) => Err(ExpectedSpanError(())),
+            Tree::Event(_) => Err(ExpectedSpanError),
             Tree::Span(span) => Ok(span),
         }
     }
