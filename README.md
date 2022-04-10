@@ -35,7 +35,7 @@ readers to easily trace a sequence of events from the same task.
 The easiest way to get started is to enable all features. Do this by
 adding the following to your `Cargo.toml` file:
 ```toml
-tracing-forest = { version = "0.1", features = ["full"] }
+tracing-forest = { version = "0.1.4", features = ["full"] }
 ```
 Then, add `tracing_forest::init` to your main function:
 ```rust
@@ -72,20 +72,17 @@ async fn main() {
         .with(HierarchicalLayer::default())
         .init();
 
-    let mut connections = vec![];
-
-    for id in 0..3 {
-        let handle = tokio::spawn(conn(id));
-        connections.push(handle);
-    }
+    let connections: Vec<_> = (0..3)
+        .map(|id| tokio::spawn(conn(id)))
+        .collect();
 
     for conn in connections {
         conn.await.unwrap();
     }
 }
 ```
-With `tracing-tree`, the trace data is printed in chronological order, making
-it difficult to parse the sequence of events for each client.
+`tracing-tree` isn't intended for concurrent use, and this is demonstrated
+by the output of the program:
 ```log
 conn id=2
 conn id=0
@@ -111,7 +108,7 @@ use tracing_forest::ForestLayer;
 
 #[tracing::instrument]
 async fn conn(id: u32) {
-    // ...
+    // -- snip --
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -121,12 +118,10 @@ async fn main() {
         .with(ForestLayer::default())
         .init();
 
-    // ...
+    // -- snip --
 }
 ```
-`tracing-forest` trades chronological ordering in favor of maintaining
-contextual coherence, providing a clearer view into the sequence of events
-that occurred in each concurrent branch.
+Now we can easily trace what happened:
 ```log
 INFO     conn [ 150µs | 100.00% ]
 INFO     ┝━ ｉ [info]: step 0 | id: 1

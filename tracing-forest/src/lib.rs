@@ -35,7 +35,7 @@
 //! The easiest way to get started is to enable all features. Do this by
 //! adding the following to your `Cargo.toml` file:
 //! ```toml
-//! tracing-forest = { version = "0.1", features = ["full"] }
+//! tracing-forest = { version = "0.1.4", features = ["full"] }
 //! ```
 //! Then, add [`tracing_forest::init`](crate::init) to your main function:
 //! ```
@@ -56,8 +56,7 @@
 //!     // Send logs to a worker task
 //!     tracing_forest::worker_task()
 //!         .set_global(true)
-//!         .map_sender(|sender| sender.with_stderr_fallback())
-//!         // Arbitrarily construct the layer into a subscriber
+//!         .map_sender(|sender| sender.or_stderr())
 //!         .build_with(|layer: ForestLayer<_, _>| {
 //!             Registry::default()
 //!                 .with(layer)
@@ -105,20 +104,17 @@
 //!         .with(HierarchicalLayer::default())
 //!         .init();
 //!
-//!     let mut connections = vec![];
-//!
-//!     for id in 0..3 {
-//!         let handle = tokio::spawn(conn(id));
-//!         connections.push(handle);
-//!     }
+//!     let connections: Vec<_> = (0..3)
+//!         .map(|id| tokio::spawn(conn(id)))
+//!         .collect();
 //!
 //!     for conn in connections {
 //!         conn.await.unwrap();
 //!     }
 //! }
 //! ```
-//! With `tracing-tree`, the trace data is printed in chronological order, making
-//! it difficult to parse the sequence of events for each client.
+//! `tracing-tree` isn't intended for concurrent use, and this is demonstrated
+//! by the output of the program:
 //! ```log
 //! conn id=2
 //! conn id=0
@@ -144,7 +140,7 @@
 //!
 //! #[tracing::instrument]
 //! async fn conn(id: u32) {
-//!     // ...
+//!     // -- snip --
 //! }
 //!
 //! #[tokio::main(flavor = "multi_thread")]
@@ -154,12 +150,10 @@
 //!         .with(ForestLayer::default())
 //!         .init();
 //!
-//!     // ...
+//!     // -- snip --
 //! }
 //! ```
-//! `tracing-forest` trades chronological ordering in favor of maintaining
-//! contextual coherence, providing a clearer view into the sequence of events
-//! that occurred in each concurrent branch.
+//! Now we can easily trace what happened:
 //! ```log
 //! INFO     conn [ 150µs | 100.00% ]
 //! INFO     ┝━ ｉ [info]: step 0 | id: 1
@@ -179,7 +173,7 @@
 //!
 //! # Categorizing events with tags
 //!
-//! This crate allows attaching supplemental information to events with tags.
+//! This crate allows attaching supplemental categorical information to events with tags.
 //!
 //! Without tags, it's difficult to distinguish where events are occurring in a system.
 //! ```log
@@ -195,14 +189,14 @@
 //! ERROR    🔐 [security.critical]: the db has been breached
 //! ```
 //!
-//! See the [`tag` module-level documentation](crate::tag) for details.
+//! See the [`tag` module-level documentation](mod@crate::tag) for details.
 //!
 //! # Attaching `Uuid`s to trace data
 //!
 //! When the `uuid` feature is enabled, the `ForestLayer` will automatically attach
-//! [`Uuid`]s to trace data. Events will adopt the uuid of their span, or the "nil"
-//! uuid at the root level. Spans will adopt the uuid of parent spans, or generate
-//! a new uuid at the root level.
+//! [`Uuid`]s to trace data. Events will adopt the UUID of their span, or the "nil"
+//! UUID at the root level. Spans will adopt the UUID of parent spans, or generate
+//! a new UUID at the root level.
 //!
 //! A span's `Uuid` can also be passed in manually to override adopting the parent's
 //! `Uuid` by passing it in as a field named `uuid`:
@@ -223,7 +217,9 @@
 //! let id = Uuid::new_v4();
 //!
 //! info_span!("my_span", uuid = %id).in_scope(|| {
-//!     assert!(id == tracing_forest::id());
+//!     let current_id = tracing_forest::id();
+//!
+//!     assert!(id == current_id);
 //! });
 //! ```
 //!
@@ -283,8 +279,9 @@
 )]
 pub mod printer;
 pub mod processor;
-pub mod tag;
 pub mod tree;
+#[macro_use]
+pub mod tag;
 #[macro_use]
 mod cfg;
 mod fail;
@@ -293,6 +290,7 @@ mod layer;
 pub use layer::{init, ForestLayer};
 pub use printer::{Formatter, Printer};
 pub use processor::Processor;
+pub use tag::Tag;
 
 cfg_tokio! {
     pub mod builder;
