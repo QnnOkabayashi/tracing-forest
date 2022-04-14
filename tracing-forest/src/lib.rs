@@ -264,9 +264,11 @@
 //! * `smallvec`: Enables some performance optimizations.
 //! * `tokio`: Enables [`worker_task`] and [`capture`].
 //! * `serde`: Enables log trees to be serialized, which is [useful for formatting][serde_fmt].
+//! * `env-filter`: Re-exports [`EnvFilter`] from the [`util`] module.
 //!
 //! [`Uuid`]: uuid::Uuid
 //! [serde_fmt]: crate::printer::Formatter#examples
+//! [`EnvFilter`]: tracing_subscriber::EnvFilter
 #![doc(issue_tracker_base_url = "https://github.com/QnnOkabayashi/tracing-forest/issues")]
 #![cfg_attr(
     docsrs,
