@@ -304,3 +304,25 @@ cfg_uuid! {
 mod sealed {
     pub trait Sealed {}
 }
+/// Bring traits from this crate, `tracing`, and `tracing_subscriber` into scope
+/// anonymously.
+pub mod traits {
+    pub use crate::Processor as _;
+    pub use tracing::Instrument as _;
+    pub use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
+}
+
+/// Bring Tracing's event and span macros into scope, along with other sensible defaults.
+pub mod util {
+    #[doc(no_inline)]
+    pub use crate::ForestLayer;
+    #[doc(no_inline)]
+    pub use tracing::metadata::LevelFilter;
+    #[doc(no_inline)]
+    pub use tracing::{
+        debug, debug_span, error, error_span, info, info_span, trace, trace_span, warn, warn_span,
+    };
+    #[cfg(feature = "env-filter")]
+    #[doc(no_inline)]
+    pub use tracing_subscriber::EnvFilter;
+}
