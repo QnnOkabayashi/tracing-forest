@@ -47,24 +47,19 @@
 //! ```
 //! This crate also provides tools for much more advanced configurations:
 //! ```
-//! use tracing_forest::{Processor, ForestLayer};
-//! use tracing_subscriber::{Registry, layer::SubscriberExt};
-//! use tracing_subscriber::filter::{EnvFilter, LevelFilter};
+//! use tracing_forest::{traits::*, util::*};
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     // Send logs to a worker task
 //!     tracing_forest::worker_task()
 //!         .set_global(true)
 //!         .map_sender(|sender| sender.or_stderr())
-//!         .build_with(|layer: ForestLayer<_, _>| {
-//!             Registry::default()
-//!                 .with(layer)
-//!                 .with(EnvFilter::from_default_env())
-//!                 .with(LevelFilter::INFO)
-//!         })
+//!         .build_on(|subscriber| subscriber
+//!             .with(EnvFilter::from_default_env())
+//!             .with(LevelFilter::INFO)
+//!         )
 //!         .on(async {
-//!             // Code run within the subscriber
+//!             // -- snip --
 //!         })
 //!         .await;
 //! }
@@ -226,12 +221,12 @@
 //! # Immediate logs
 //!
 //! Since `tracing-forest` stores trace data in memory until the root span finishes,
-//! it can be a long time until logs ever written. This can be an issue when some
-//! logs are too urgent to wait.
+//! it can be a long time until a log is written. This may not be acceptable in
+//! certain use cases.
 //!
 //! To resolve this, the `immediate` field can be used on an event to print the
-//! event and it's parent spans to stderr. The event will still appear in the
-//! trace tree written once the root span closes.
+//! event and it's parent spans to stderr. Unlike `eprintln!`, the event will
+//! still appear in the trace tree written once the root span closes.
 //!
 //! ## Example
 //!
@@ -264,9 +259,13 @@
 //! * `smallvec`: Enables some performance optimizations.
 //! * `tokio`: Enables [`worker_task`] and [`capture`].
 //! * `serde`: Enables log trees to be serialized, which is [useful for formatting][serde_fmt].
+//! * `env-filter`: Re-exports [`EnvFilter`] from the [`util`] module.
+//!
+//! By default, only `smallvec` in enabled.
 //!
 //! [`Uuid`]: uuid::Uuid
 //! [serde_fmt]: crate::printer::Formatter#examples
+//! [`EnvFilter`]: tracing_subscriber::EnvFilter
 #![doc(issue_tracker_base_url = "https://github.com/QnnOkabayashi/tracing-forest/issues")]
 #![cfg_attr(
     docsrs,
@@ -277,6 +276,7 @@
     // Fail the docs build if any intra-docs links are broken
     deny(rustdoc::broken_intra_doc_links),
 )]
+#![warn(missing_docs)]
 pub mod printer;
 pub mod processor;
 pub mod tree;
@@ -301,6 +301,25 @@ cfg_uuid! {
     pub use layer::id::id;
 }
 
-mod sealed {
-    pub trait Sealed {}
+/// Bring traits from this crate, `tracing`, and `tracing_subscriber` into scope
+/// anonymously.
+pub mod traits {
+    pub use crate::Processor as _;
+    pub use tracing::Instrument as _;
+    pub use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
+}
+
+/// Bring Tracing's event and span macros into scope, along with other sensible defaults.
+pub mod util {
+    #[doc(no_inline)]
+    pub use crate::ForestLayer;
+    #[doc(no_inline)]
+    pub use tracing::metadata::LevelFilter;
+    #[doc(no_inline)]
+    pub use tracing::{
+        debug, debug_span, error, error_span, info, info_span, trace, trace_span, warn, warn_span,
+    };
+    #[cfg(feature = "env-filter")]
+    #[doc(no_inline)]
+    pub use tracing_subscriber::EnvFilter;
 }

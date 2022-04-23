@@ -12,7 +12,7 @@ pub use pretty::Pretty;
 ///
 /// # Examples
 ///
-/// This trait implements all `Fn(&Tree) -> Result<String, E>` types, where `E: Debug`.
+/// This trait implements all `Fn(&Tree) -> Result<String, E>` types, where `E: Error + Send + Sync`.
 /// If the `serde` feature is enabled, functions like `serde_json::to_string_pretty`
 /// can be used wherever a `Formatter` is required.
 /// ```

@@ -1,5 +1,5 @@
 use tracing::{debug, error, info, info_span, trace, warn, Level};
-use tracing_forest::{tag, ForestLayer, Printer};
+use tracing_forest::{tag, traits::*, ForestLayer, Printer};
 use tracing_subscriber::{Layer, Registry};
 
 #[test]
@@ -7,7 +7,7 @@ use tracing_subscriber::{Layer, Registry};
 fn test_manual_with_json() {
     let processor = Printer::new().formatter(serde_json::to_string_pretty);
     let layer = ForestLayer::from(processor);
-    let subscriber = layer.with_subscriber(Registry::default());
+    let subscriber = Registry::default().with(layer);
     tracing::subscriber::with_default(subscriber, || {
         info!("hello, world!");
         info_span!("my-span").in_scope(|| {

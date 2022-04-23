@@ -14,8 +14,9 @@ license = "MIT"
 repository = "https://github.com/QnnOkabayashi/tracing-forest"
 
 [features]
-default = []
-full = ["uuid", "chrono", "smallvec", "tokio", "serde"]
+default = ["smallvec"]
+full = ["uuid", "chrono", "smallvec", "tokio", "serde", "env-filter"]
+env-filter = ["tracing-subscriber/env-filter"]
 
 [dependencies]
 tracing = "0.1"

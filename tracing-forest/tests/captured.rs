@@ -1,15 +1,10 @@
 use tokio::time::Duration;
-use tracing::{info, info_span, trace};
+use tracing_forest::{traits::*, util::*};
 
 #[tokio::test]
 async fn test_filtering() -> Result<(), Box<dyn std::error::Error>> {
-    use tracing_forest::ForestLayer;
-    use tracing_subscriber::{filter::LevelFilter, layer::SubscriberExt, Registry};
-
     let logs = tracing_forest::capture()
-        .build_with(|layer: ForestLayer<_, _>| {
-            Registry::default().with(layer).with(LevelFilter::INFO)
-        })
+        .build_on(|subscriber| subscriber.with(LevelFilter::INFO))
         .on(async {
             trace!("unimportant information");
             info!("important information");

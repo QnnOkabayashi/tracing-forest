@@ -16,7 +16,7 @@ use uuid::Uuid;
 /// # tracing_forest::init();
 /// let uuid = Uuid::new_v4();
 ///
-/// // Tracings log syntax allows us to omit the redundent naming of the field here
+/// // Tracing's syntax allows us to omit the redundent naming of the field here
 /// info_span!("my_span", %uuid).in_scope(|| {
 ///     assert!(tracing_forest::id() == uuid);
 /// });

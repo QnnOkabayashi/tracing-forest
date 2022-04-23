@@ -1,4 +1,4 @@
-//! Provide categorical information to events.
+//! Supplement events with categorical information.
 //!
 //! # Use cases for tags
 //!
@@ -195,7 +195,7 @@ cfg_serde! {
 /// See the [module-level documentation](mod@crate::tag) for more details.
 pub trait TagParser: 'static {
     /// Parse a tag from a [`tracing::Event`]
-    fn try_parse(&self, event: &Event) -> Option<Tag>;
+    fn parse(&self, event: &Event) -> Option<Tag>;
 }
 
 /// A `TagParser` that always returns `None`.
@@ -203,8 +203,7 @@ pub trait TagParser: 'static {
 pub struct NoTag;
 
 impl TagParser for NoTag {
-    #[inline]
-    fn try_parse(&self, _event: &Event) -> Option<Tag> {
+    fn parse(&self, _event: &Event) -> Option<Tag> {
         None
     }
 }
@@ -213,8 +212,7 @@ impl<F> TagParser for F
 where
     F: 'static + Fn(&Event) -> Option<Tag>,
 {
-    #[inline]
-    fn try_parse(&self, event: &Event) -> Option<Tag> {
+    fn parse(&self, event: &Event) -> Option<Tag> {
         self(event)
     }
 }

@@ -42,9 +42,9 @@
 //! ```
 //! Produces the output:
 //! ```log
-//! INFO     ＿ [info]: Hello, world!
+//! INFO     ｉ [info]: Hello, world!
 //! INFO     my_span [ 26.0µs | 100.000% ]
-//! INFO     ┕━ ＿ [info]: Relevant information
+//! INFO     ┕━ ｉ [info]: Relevant information
 //! ```
 //! 
 //! For full configuration options, see the [`LayerBuilder`] documentation.
@@ -107,14 +107,13 @@ use crate::tree::Tree;
 use crate::fail;
 use crate::tag::{TagParser, NoTag};
 use crate::processor::{self, Processor, WithFallback};
-use crate::sealed::Sealed;
 use std::future::Future;
-use std::iter::from_fn;
-use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use std::iter;
+use tokio::sync::mpsc::{self, UnboundedReceiver};
 use tokio::sync::oneshot;
 use tracing::Subscriber;
 use tracing_subscriber::Registry;
-use tracing_subscriber::layer::{Layer, Layered};
+use tracing_subscriber::layer::{Layered, SubscriberExt as _};
 
 /// Begins the configuration of a `ForestLayer` subscriber that sends log trees
 /// to a processing task for formatting and writing.
@@ -132,13 +131,21 @@ use tracing_subscriber::layer::{Layer, Layered};
 /// 
 /// [nonblocking-processing]: crate::builder#nonblocking-log-processing-with-worker_task
 /// [`set_global`]: LayerBuilder::set_global
-pub fn worker_task() -> LayerBuilder<TreeSender, Process<PrettyPrinter>, NoTag> {
-    let (sender_processor, receiver) = mpsc::unbounded_channel();
+pub fn worker_task() -> LayerBuilder<InnerSender<impl Processor>, Process<PrettyPrinter>, NoTag> {
+    let (tx, rx) = mpsc::unbounded_channel();
+
+    let sender_processor = processor::from_fn(move |tree| tx
+        .send(tree)
+        .map_err(|err| {
+            let msg = err.to_string().into();
+            (err.0, msg)
+        })
+    );
 
     LayerBuilder {
-        sender_processor: TreeSender(sender_processor),
+        sender_processor: InnerSender(sender_processor),
         worker_processor: Process(Printer::new()),
-        receiver,
+        receiver: rx,
         tag: NoTag,
         is_global: false,
     }
@@ -160,18 +167,25 @@ pub fn worker_task() -> LayerBuilder<TreeSender, Process<PrettyPrinter>, NoTag> 
 /// 
 /// [inspecting-trace-data]: crate::builder#inspecting-trace-data-in-unit-tests-with-capture
 /// [`set_global`]: LayerBuilder::set_global
-pub fn capture() -> LayerBuilder<TreeSender, Capture, NoTag> {
-    let (sender_processor, receiver) = mpsc::unbounded_channel();
+pub fn capture() -> LayerBuilder<InnerSender<impl Processor>, Capture, NoTag> {
+    let (tx, rx) = mpsc::unbounded_channel();
+
+    let sender_processor = processor::from_fn(move |tree| tx
+        .send(tree)
+        .map_err(|err| {
+            let msg = err.to_string().into();
+            (err.0, msg)
+        })
+    );
 
     LayerBuilder {
-        sender_processor: TreeSender(sender_processor),
+        sender_processor: InnerSender(sender_processor),
         worker_processor: Capture(()),
-        receiver,
+        receiver: rx,
         tag: NoTag,
         is_global: false,
     }
 }
-
 
 /// Return type of [`worker_task`] and [`capture`].
 /// 
@@ -186,8 +200,8 @@ pub fn capture() -> LayerBuilder<TreeSender, Capture, NoTag> {
 /// * Configuring the [processor][map_receiver] in the worker task.
 /// 
 /// To finish the `Runtime`, call the [`build`] method to compose the configured
-/// `ForestLayer` onto a [`Registry`]. Alternatively, the [`build_with`] method
-/// can be used construct an arbitrary `Subscriber` from the configured `ForestLayer`,
+/// `ForestLayer` onto a [`Registry`]. Alternatively, the [`build_on`] method
+/// can be used construct arbitrary `Subscriber`s from the configured `ForestLayer`,
 /// which is used in the returned `Runtime`.
 /// 
 /// [builder]: https://rust-lang.github.io/api-guidelines/type-safety.html#builders-enable-construction-of-complex-values-c-builder
@@ -196,7 +210,7 @@ pub fn capture() -> LayerBuilder<TreeSender, Capture, NoTag> {
 /// [map_sender]: LayerBuilder::map_sender
 /// [map_receiver]: LayerBuilder::map_receiver
 /// [`build`]: LayerBuilder::build
-/// [`build_with`]: LayerBuilder::build_with
+/// [`build_on`]: LayerBuilder::build_on
 pub struct LayerBuilder<Tx, Rx, T> {
     sender_processor: Tx,
     worker_processor: Rx,
@@ -213,23 +227,24 @@ pub struct Process<P>(P);
 
 /// The [`Processor`] used within a `tracing-forest` subscriber for sending logs
 /// to a processing task.
+/// 
+/// This type cannot be constructed by downstream users.
 #[derive(Debug)]
-pub struct TreeSender(UnboundedSender<Tree>);
+pub struct InnerSender<P>(P);
 
-impl Processor for TreeSender {
+impl<P: Processor> Processor for InnerSender<P> {
     fn process(&self, tree: Tree) -> processor::Result {
         self.0.process(tree)
     }
 }
 
-#[doc(hidden)]
-pub trait SealedSender: Sealed {}
+mod sealed {
+    pub trait Sealed {}
+}
 
-impl Sealed for TreeSender {}
-impl SealedSender for TreeSender {}
+impl<P> sealed::Sealed for InnerSender<P> {}
 
-impl<S: SealedSender, P> Sealed for WithFallback<S, P> {}
-impl<S: SealedSender, P> SealedSender for WithFallback<S, P> {}
+impl<S: sealed::Sealed, P> sealed::Sealed for WithFallback<S, P> {}
 
 impl<Tx, P, T> LayerBuilder<Tx, Process<P>, T>
 where
@@ -281,7 +296,7 @@ where
 
 impl<Tx, Rx, T> LayerBuilder<Tx, Rx, T>
 where
-    Tx: Processor + SealedSender,
+    Tx: Processor + sealed::Sealed,
     T: TagParser,
 {
     /// Configure the processer within the subscriber that sends log trees to
@@ -344,7 +359,7 @@ where
     pub fn map_sender<F, Tx2>(self, f: F) -> LayerBuilder<Tx2, Rx, T>
     where
         F: FnOnce(Tx) -> Tx2,
-        Tx2: Processor + SealedSender,
+        Tx2: Processor + sealed::Sealed,
     {
         LayerBuilder {
             sender_processor: f(self.sender_processor),
@@ -386,8 +401,10 @@ where
     /// returns it as a [`Runtime`].
     /// 
     /// This method is useful for a basic configuration of a `Subscriber`. For
-    /// a more advanced configuration, see the [`build_with`] method.
+    /// a more advanced configuration, see the [`build_on`] and [`build_with`]
+    /// methods.
     /// 
+    /// [`build_on`]: LayerBuilder::build_on
     /// [`build_with`]: LayerBuilder::build_with
     /// 
     /// # Examples
@@ -404,16 +421,21 @@ where
     /// }
     /// ```
     pub fn build(self) -> Runtime<Layered<ForestLayer<Tx, T>, Registry>, Rx> {
-        self.build_with(|layer| layer.with_subscriber(Registry::default()))
+        self.build_with(|layer| Registry::default().with(layer))
     }
 
     /// Finishes the `ForestLayer` by calling a function to build a `Subscriber`,
-    /// and returns it as a [`Runtime`].
+    /// and returns in as a [`Runtime`].
     /// 
+    /// Unlike [`build_with`], this method composes the layer onto a [`Registry`]
+    /// prior to passing it into the function. This makes it more convenient for
+    /// the majority of use cases.
+    ///
     /// This method is useful for advanced configuration of `Subscriber`s as
     /// defined in [`tracing-subscriber`s documentation]. For a basic configuration,
     /// see the [`build`] method.
     /// 
+    /// [`build_with`]: LayerBuilder::build_with
     /// [`tracing-subscriber`s documentation]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/index.html#composing-layers
     /// [`build`]: LayerBuilder::build
     /// 
@@ -421,8 +443,48 @@ where
     /// 
     /// Composing a `Subscriber` with multiple layers:
     /// ```
-    /// use tracing_subscriber::{filter::LevelFilter, layer::SubscriberExt, Registry};
-    /// use tracing_forest::ForestLayer;
+    /// use tracing_subscriber::filter::LevelFilter;
+    /// use tracing_forest::{traits::*, util::*};
+    /// 
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     tracing_forest::worker_task()
+    ///         .build_on(|subscriber| subscriber.with(LevelFilter::INFO))
+    ///         .on(async {
+    ///             // ...
+    ///         })
+    ///         .await;
+    /// }
+    /// ```
+    pub fn build_on<F, S>(self, f: F) -> Runtime<S, Rx>
+    where
+        F: FnOnce(Layered<ForestLayer<Tx, T>, Registry>) -> S,
+        S: Subscriber,
+    {
+        self.build_with(|layer| f(Registry::default().with(layer)))
+    }
+
+    /// Finishes the `ForestLayer` by calling a function to build a `Subscriber`,
+    /// and returns it as a [`Runtime`].
+    ///
+    /// Unlike [`build_on`], this method passes the `ForestLayer` to the function
+    /// without presupposing a [`Registry`] base. This makes it the most flexible
+    /// option for construction.
+    /// 
+    /// This method is useful for advanced configuration of `Subscriber`s as
+    /// defined in [`tracing-subscriber`s documentation]. For a basic configuration,
+    /// see the [`build`] method.
+    /// 
+    /// [`build_on`]: LayerBuilder::build_on
+    /// [`tracing-subscriber`s documentation]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/index.html#composing-layers
+    /// [`build`]: LayerBuilder::build
+    /// 
+    /// # Examples
+    /// 
+    /// Composing a `Subscriber` with multiple layers:
+    /// ```
+    /// use tracing_subscriber::Registry;
+    /// use tracing_forest::{traits::*, util::*};
     /// 
     /// #[tokio::main]
     /// async fn main() {
@@ -532,6 +594,6 @@ where
 
         receiver.close();
 
-        from_fn(|| receiver.try_recv().ok()).collect()
+        iter::from_fn(|| receiver.try_recv().ok()).collect()
     }
 }

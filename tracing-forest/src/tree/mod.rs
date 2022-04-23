@@ -1,6 +1,7 @@
-//! This module defines the core tree structure of `tracing-forest`, and provides
-//! methods used for log inspection when using [`capture`]. It consists of three
-//! types: [`Tree`], [`Span`], and [`Event`].
+//! The core tree structure of `tracing-forest`.
+//!
+//! This module provides methods used for log inspection when using [`capture`].
+//! It consists of three types: [`Tree`], [`Span`], and [`Event`].
 //!
 //! [`capture`]: crate::builder::capture
 use crate::tag::Tag;
@@ -17,7 +18,7 @@ use uuid::Uuid;
 mod ser;
 
 mod error;
-pub(crate) use error::{ExpectedEventError, ExpectedSpanError};
+pub use error::{ExpectedEventError, ExpectedSpanError};
 
 mod field;
 pub use field::Field;
@@ -27,14 +28,18 @@ pub(crate) use field::FieldSet;
 ///
 /// The inner types can be extracted through a `match` statement. Alternatively,
 /// the [`event`] and [`span`] methods provide a more ergonomic way to access the
-/// inner types.
+/// inner types in unit tests when combined with the [`capture`] function.
 ///
 /// [`event`]: Tree::event
 /// [`span`]: Tree::span
+/// [`capture`]: crate::builder::capture
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum Tree {
+    /// An [`Event`] leaf node.
     Event(Event),
+
+    /// A [`Span`] inner node.
     Span(Span),
 }
 
@@ -50,6 +55,7 @@ pub struct Event {
     pub(crate) message: Option<String>,
 
     /// The tag that the event was collected with.
+    // Shouldn't this have `Serialize`?
     pub(crate) tag: Tag,
 
     /// Key-value data.

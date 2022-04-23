@@ -1,35 +1,23 @@
-//! Trait for processing logs of a span after it is closed.
+//! Trait for processing log trees on completion.
 //!
 //! See [`Processor`] for more details.
-use crate::cfg_tokio;
 use crate::printer::{MakeStderr, MakeStdout, Pretty, Printer};
 use crate::tree::Tree;
 use std::error::Error;
-use std::fmt;
-use std::sync::mpsc::{Sender, SyncSender};
 use std::sync::Arc;
-
-/// An [`Error`] type for when a the sender half of a channel fails to send a
-/// `Tree` across a channel for processing.
-#[derive(Debug)]
-pub struct ChannelClosedError;
-
-impl fmt::Display for ChannelClosedError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        "Sending on a closed channel, this is likely caused by sending from a dangling thread/task. If this is intentional, try adding a fallback with `Processor::or_stderr`.".fmt(f)
-    }
-}
-
-impl Error for ChannelClosedError {}
 
 /// The result type of [`Processor::process`].
 pub type Result = std::result::Result<(), (Tree, Box<dyn Error + Send + Sync>)>;
 
-/// A type that can process [trace trees].
+/// A trait for processing completed [`Tree`]s.
 ///
 /// `Processor`s are responsible for both formatting and writing logs to their
 /// intended destinations. This is typically implemented using
 /// [`Formatter`], [`MakeWriter`], and [`io::Write`].
+///
+/// While this trait may be implemented on downstream types, [`from_fn`]
+/// provides a convenient interface for creating `Processor`s without having to
+/// explicitly define new types.
 ///
 /// [trace trees]: crate::tree::Tree
 /// [`Formatter`]: crate::printer::Formatter
@@ -57,10 +45,10 @@ pub trait Processor: 'static + Sized {
     /// [`or_stdout`]: Processor::or_stdout
     /// [`or_stderr`]: Processor::or_stderr
     /// [`or_none`]: Processor::or_none
-    fn or<P: Processor>(self, fallback: P) -> WithFallback<Self, P> {
+    fn or<P: Processor>(self, processor: P) -> WithFallback<Self, P> {
         WithFallback {
             primary: self,
-            fallback,
+            fallback: processor,
         }
     }
 
@@ -92,6 +80,49 @@ pub struct WithFallback<P, F> {
     fallback: F,
 }
 
+/// A [`Processor`] that ignores any incoming logs.
+///
+/// This processor cannot fail.
+#[derive(Debug)]
+pub struct Sink;
+
+/// A [`Processor`] that processes incoming logs via a function.
+///
+/// Instances of `FromFn` are returned by the [`from_fn`] function.
+#[derive(Debug)]
+pub struct FromFn<F>(F);
+
+/// Create a processor that processes incoming logs via a function.
+///
+/// # Examples
+///
+/// Internally, [`worker_task`] uses `from_fn` to allow the subscriber to send
+/// trace data across a channel to a processing task.
+/// ```
+/// use tokio::sync::mpsc;
+/// use tracing_forest::processor;
+///
+/// let (tx, rx) = mpsc::unbounded_channel();
+///
+/// let sender_processor = processor::from_fn(move |tree| tx
+///     .send(tree)
+///     .map_err(|err| {
+///         let msg = err.to_string().into();
+///         (err.0, msg)
+///     })
+/// );
+///
+/// // -- snip --
+/// ```
+///
+/// [`worker_task`]: crate::builder::worker_task
+pub fn from_fn<F>(f: F) -> FromFn<F>
+where
+    F: 'static + Fn(Tree) -> Result,
+{
+    FromFn(f)
+}
+
 impl<P, F> Processor for WithFallback<P, F>
 where
     P: Processor,
@@ -105,15 +136,18 @@ where
     }
 }
 
-/// A [`Processor`] that ignores any incoming logs.
-///
-/// This processor cannot fail.
-#[derive(Debug)]
-pub struct Sink;
-
 impl Processor for Sink {
     fn process(&self, _tree: Tree) -> Result {
         Ok(())
+    }
+}
+
+impl<F> Processor for FromFn<F>
+where
+    F: 'static + Fn(Tree) -> Result,
+{
+    fn process(&self, tree: Tree) -> Result {
+        (self.0)(tree)
     }
 }
 
@@ -126,29 +160,5 @@ impl<P: Processor> Processor for Box<P> {
 impl<P: Processor> Processor for Arc<P> {
     fn process(&self, tree: Tree) -> Result {
         self.as_ref().process(tree)
-    }
-}
-
-impl Processor for Sender<Tree> {
-    fn process(&self, tree: Tree) -> Result {
-        self.send(tree)
-            .map_err(|err| (err.0, ChannelClosedError.into()))
-    }
-}
-
-impl Processor for SyncSender<Tree> {
-    fn process(&self, tree: Tree) -> Result {
-        self.send(tree)
-            .map_err(|err| (err.0, ChannelClosedError.into()))
-    }
-}
-
-cfg_tokio! {
-    use tokio::sync::mpsc::UnboundedSender;
-
-    impl Processor for UnboundedSender<Tree> {
-        fn process(&self, tree: Tree) -> Result {
-            self.send(tree).map_err(|err| (err.0, ChannelClosedError.into()))
-        }
     }
 }

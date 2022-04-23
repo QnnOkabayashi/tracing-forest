@@ -198,10 +198,7 @@ where
         event.record(&mut visitor);
 
         let level = *event.metadata().level();
-        let tag = self
-            .tag
-            .try_parse(event)
-            .unwrap_or_else(|| Tag::from(level));
+        let tag = self.tag.parse(event).unwrap_or_else(|| Tag::from(level));
 
         let current_span = ctx.event_span(event);
 
