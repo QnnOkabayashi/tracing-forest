@@ -35,12 +35,12 @@ impl OpenedSpan {
 
             attrs.record(&mut |field: &Field, value: &dyn fmt::Debug| {
                 if field.name() == "uuid" && maybe_uuid.is_none() {
-                    const SIZE: usize = 64;
-                    let mut buf = [0u8; SIZE];
+                    const LENGTH: usize = 45;
+                    let mut buf = [0u8; LENGTH];
                     let mut remaining = &mut buf[..];
 
                     if let Ok(()) = write!(remaining, "{:?}", value) {
-                        let len = SIZE - remaining.len();
+                        let len = LENGTH - remaining.len();
                         if let Ok(parsed) = id::try_parse(&buf[..len]) {
                             maybe_uuid = Some(parsed);
                         }
@@ -197,26 +197,25 @@ where
 
         event.record(&mut visitor);
 
-        let level = *event.metadata().level();
-        let tag = self.tag.parse(event).unwrap_or_else(|| Tag::from(level));
+        let shared = tree::Shared {
+            #[cfg(feature = "uuid")]
+            uuid: Uuid::nil(),
+            #[cfg(feature = "chrono")]
+            timestamp: Utc::now(),
+            level: *event.metadata().level(),
+        };
 
-        let current_span = ctx.event_span(event);
-
-        let event = tree::Event {
-            shared: tree::Shared {
-                #[cfg(feature = "uuid")]
-                uuid: Uuid::nil(),
-                #[cfg(feature = "chrono")]
-                timestamp: Utc::now(),
-                level,
-            },
+        let tree_event = tree::Event {
+            shared,
             message: visitor.message,
-            tag,
+            tag: self.tag.parse(event),
             fields: visitor.fields,
         };
 
+        let current_span = ctx.event_span(event);
+
         if visitor.immediate {
-            write_immediate(&event, current_span.as_ref()).expect("writing urgent failed");
+            write_immediate(&tree_event, current_span.as_ref()).expect("writing urgent failed");
         }
 
         match current_span.as_ref() {
@@ -224,10 +223,10 @@ where
                 .extensions_mut()
                 .get_mut::<OpenedSpan>()
                 .unwrap_or_else(fail::opened_span_not_in_exts)
-                .record_event(event),
+                .record_event(tree_event),
             None => self
                 .processor
-                .process(Tree::Event(event))
+                .process(Tree::Event(tree_event))
                 .unwrap_or_else(fail::processing_error),
         }
     }
@@ -310,7 +309,7 @@ where
 
     write!(writer, "{:<8} ", event.level())?;
 
-    let tag = Tag::from(event.level());
+    let tag = event.tag().unwrap_or_else(|| Tag::from(event.level()));
 
     write!(writer, "{icon} IMMEDIATE {icon} ", icon = tag.icon())?;
 

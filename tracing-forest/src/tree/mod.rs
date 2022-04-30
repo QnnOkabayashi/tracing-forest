@@ -5,7 +5,7 @@
 //!
 //! [`capture`]: crate::builder::capture
 use crate::tag::Tag;
-use crate::{cfg_chrono, cfg_uuid};
+// use crate::{cfg_chrono, cfg_uuid};
 #[cfg(feature = "chrono")]
 use chrono::{DateTime, Utc};
 #[cfg(feature = "serde")]
@@ -55,8 +55,7 @@ pub struct Event {
     pub(crate) message: Option<String>,
 
     /// The tag that the event was collected with.
-    // Shouldn't this have `Serialize`?
-    pub(crate) tag: Tag,
+    pub(crate) tag: Option<Tag>,
 
     /// Key-value data.
     #[cfg_attr(feature = "serde", serde(serialize_with = "ser::fields"))]
@@ -191,18 +190,16 @@ impl Tree {
 }
 
 impl Event {
-    cfg_uuid! {
-        /// Returns the event's [`Uuid`].
-        pub fn uuid(&self) -> Uuid {
-            self.shared.uuid
-        }
+    /// Returns the event's [`Uuid`].
+    #[cfg(feature = "uuid")]
+    pub fn uuid(&self) -> Uuid {
+        self.shared.uuid
     }
 
-    cfg_chrono! {
-        /// Returns the [`DateTime`] that the event occurred at.
-        pub fn timestamp(&self) -> DateTime<Utc> {
-            self.shared.timestamp
-        }
+    /// Returns the [`DateTime`] that the event occurred at.
+    #[cfg(feature = "chrono")]
+    pub fn timestamp(&self) -> DateTime<Utc> {
+        self.shared.timestamp
     }
 
     /// Returns the event's [`Level`].
@@ -210,17 +207,14 @@ impl Event {
         self.shared.level
     }
 
-    /// Returns the event's message.
+    /// Returns the event's message, if there is one.
     pub fn message(&self) -> Option<&str> {
         self.message.as_deref()
     }
 
-    /// Returns the event's [`Tag`].
-    ///
-    /// If no tag was provided during construction, the event will hold a default
-    /// tag associated with its level.
-    pub fn tag(&self) -> &Tag {
-        &self.tag
+    /// Returns the event's [`Tag`], if there is one.
+    pub fn tag(&self) -> Option<Tag> {
+        self.tag
     }
 
     /// Returns the event's fields.
@@ -240,18 +234,16 @@ impl Span {
         }
     }
 
-    cfg_uuid! {
-        /// Returns the span's [`Uuid`].
-        pub fn uuid(&self) -> Uuid {
-            self.shared.uuid
-        }
+    /// Returns the span's [`Uuid`].
+    #[cfg(feature = "uuid")]
+    pub fn uuid(&self) -> Uuid {
+        self.shared.uuid
     }
 
-    cfg_chrono! {
-        /// Returns the [`DateTime`] that the span occurred at.
-        pub fn timestamp(&self) -> DateTime<Utc> {
-            self.shared.timestamp
-        }
+    /// Returns the [`DateTime`] that the span occurred at.
+    #[cfg(feature = "chrono")]
+    pub fn timestamp(&self) -> DateTime<Utc> {
+        self.shared.timestamp
     }
 
     /// Returns the span's [`Level`].

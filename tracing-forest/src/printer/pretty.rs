@@ -1,9 +1,10 @@
 use crate::printer::Formatter;
 use crate::tree::{Event, Shared, Span, Tree};
+use crate::Tag;
 use std::fmt::{self, Write};
 
 #[cfg(feature = "smallvec")]
-type IndentVec = smallvec::SmallVec<[Indent; 64]>;
+type IndentVec = smallvec::SmallVec<[Indent; 32]>;
 #[cfg(not(feature = "smallvec"))]
 type IndentVec = Vec<Indent>;
 
@@ -106,7 +107,7 @@ impl Pretty {
     }
 
     fn format_event(event: &Event, writer: &mut String) -> fmt::Result {
-        let tag = event.tag();
+        let tag = event.tag().unwrap_or_else(|| Tag::from(event.level()));
         let message = event.message().unwrap_or("");
 
         write!(writer, "{} [{}]: {}", tag.icon(), tag, message)?;
