@@ -168,7 +168,7 @@
 //!
 //! # Categorizing events with tags
 //!
-//! This crate allows attaching supplemental categorical information to events with tags.
+//! This crate allows attaching supplemental categorical information to events with [`Tag`]s.
 //!
 //! Without tags, it's difficult to distinguish where events are occurring in a system.
 //! ```log
@@ -279,9 +279,8 @@
 #![warn(missing_docs)]
 pub mod printer;
 pub mod processor;
-pub mod tree;
-#[macro_use]
 pub mod tag;
+pub mod tree;
 #[macro_use]
 mod cfg;
 mod fail;
@@ -318,9 +317,9 @@ pub mod util {
     #[doc(no_inline)]
     pub use tracing::{
         debug, debug_span, error, error_span, info, info_span, trace, trace_span, warn, warn_span,
+        Event, Level,
     };
     #[cfg(feature = "env-filter")]
     #[doc(no_inline)]
     pub use tracing_subscriber::EnvFilter;
 }
-

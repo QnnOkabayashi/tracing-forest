@@ -1,6 +1,5 @@
-use tracing::{debug, error, info, info_span, trace, warn, Level};
-use tracing_forest::{tag, traits::*, ForestLayer, Printer};
-use tracing_subscriber::{Layer, Registry};
+use tracing_forest::{traits::*, util::*, ForestLayer, Printer, Tag};
+use tracing_subscriber::Registry;
 
 #[test]
 #[ignore]
@@ -20,19 +19,31 @@ fn test_manual_with_json() {
 #[ignore]
 fn pretty_example() {
     let _guard = {
-        let layer = ForestLayer::new(Printer::default(), |event: &tracing::Event| {
+        let layer = ForestLayer::new(Printer::default(), |event: &Event| {
             let level = *event.metadata().level();
             let target = event.metadata().target();
 
-            match target {
-                "security" if level == Level::ERROR => Some(tag!('🔐'[security.critical])),
-                "security" if level == Level::INFO => Some(tag!('🔓'[security.access])), // <- idents
-                "admin" | "request" | "filter" => Some(tag!(target, level)), // <- exprs
-                _ => None,
-            }
+            let tag = match target {
+                "security" if level == Level::ERROR => Tag::builder()
+                    .set_icon('🔐')
+                    .set_prefix(target)
+                    .set_suffix("critical")
+                    .finish(),
+                "security" if level == Level::INFO => Tag::builder()
+                    .set_icon('🔓')
+                    .set_prefix(target)
+                    .set_suffix("access")
+                    .finish(),
+                "admin" | "request" | "filter" => {
+                    Tag::builder().set_prefix(target).set_level(level).finish()
+                }
+                _ => return None,
+            };
+
+            Some(tag)
         });
 
-        let subscriber = layer.with_subscriber(Registry::default());
+        let subscriber = Registry::default().with(layer);
         tracing::subscriber::set_default(subscriber)
     };
 
@@ -48,7 +59,7 @@ fn pretty_example() {
                             info_span!("be::idl_arc_sqlite::get_idl").in_scope(|| {
                                 error!(target: "admin", "On no, an admin error occurred :(");
                                 debug!("An untagged debug log");
-                                info!(target: "admin", alive = false, status = "very sad", "there's been a big mistake")
+                                info!(target: "admin", alive = false, status = "sad", "there's been a big mistake")
                             });
                         });
                     });
