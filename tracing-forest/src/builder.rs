@@ -132,23 +132,7 @@ use tracing_subscriber::layer::{Layered, SubscriberExt as _};
 /// [nonblocking-processing]: crate::builder#nonblocking-log-processing-with-worker_task
 /// [`set_global`]: LayerBuilder::set_global
 pub fn worker_task() -> LayerBuilder<InnerSender<impl Processor>, Process<PrettyPrinter>, NoTag> {
-    let (tx, rx) = mpsc::unbounded_channel();
-
-    let sender_processor = processor::from_fn(move |tree| tx
-        .send(tree)
-        .map_err(|err| {
-            let msg = err.to_string().into();
-            (err.0, msg)
-        })
-    );
-
-    LayerBuilder {
-        sender_processor: InnerSender(sender_processor),
-        worker_processor: Process(Printer::new()),
-        receiver: rx,
-        tag: NoTag,
-        is_global: false,
-    }
+    worker_task_inner(Process(Printer::new()), true)
 }
 
 /// Begins the configuration of a `ForestLayer` subscriber that sends log trees
@@ -168,6 +152,10 @@ pub fn worker_task() -> LayerBuilder<InnerSender<impl Processor>, Process<Pretty
 /// [inspecting-trace-data]: crate::builder#inspecting-trace-data-in-unit-tests-with-capture
 /// [`set_global`]: LayerBuilder::set_global
 pub fn capture() -> LayerBuilder<InnerSender<impl Processor>, Capture, NoTag> {
+    worker_task_inner(Capture(()), false)
+}
+
+fn worker_task_inner<P>(worker_processor: P, is_global: bool) -> LayerBuilder<InnerSender<impl Processor>, P, NoTag> {
     let (tx, rx) = mpsc::unbounded_channel();
 
     let sender_processor = processor::from_fn(move |tree| tx
@@ -180,10 +168,10 @@ pub fn capture() -> LayerBuilder<InnerSender<impl Processor>, Capture, NoTag> {
 
     LayerBuilder {
         sender_processor: InnerSender(sender_processor),
-        worker_processor: Capture(()),
+        worker_processor,
         receiver: rx,
         tag: NoTag,
-        is_global: false,
+        is_global,
     }
 }
 
@@ -443,7 +431,6 @@ where
     /// 
     /// Composing a `Subscriber` with multiple layers:
     /// ```
-    /// use tracing_subscriber::filter::LevelFilter;
     /// use tracing_forest::{traits::*, util::*};
     /// 
     /// #[tokio::main]
@@ -550,20 +537,22 @@ where
             receiver.close();
 
             // Drain any remaining logs in the channel buffer.
-            while let Some(tree) = receiver.recv().await {
+            while let Ok(tree) = receiver.try_recv() {
                 processor.process(tree).unwrap_or_else(fail::processing_error);
             }
         });
 
-        let _guard = if self.is_global {
-            tracing::subscriber::set_global_default(self.subscriber)
-                .expect("global default already set");
-            None
-        } else {
-            Some(tracing::subscriber::set_default(self.subscriber))
-        };
+        {
+            let _guard = if self.is_global {
+                tracing::subscriber::set_global_default(self.subscriber)
+                    .expect("global default already set");
+                None
+            } else {
+                Some(tracing::subscriber::set_default(self.subscriber))
+            };
 
-        f.await;
+            f.await;
+        }
 
         shutdown_tx.send(()).expect("Shutdown signal couldn't send, this is a bug");
 
