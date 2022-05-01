@@ -244,13 +244,17 @@ where
     /// This method accepts a closure that accepts the current [`Processor`] on the
     /// worker task, and maps it to another [`Processor`].
     /// 
+    /// # Note
+    /// 
+    /// This method is only available if called after [`worker_task`].
+    /// 
     /// # Examples
     ///
     /// Configuring the writing task to write to a file, or else fall back to stderr.
     /// ```no_run
-    /// # #[tokio::main(flavor = "current_thread")]
+    /// # #[tokio::main]
     /// # async fn main() {
-    /// use tracing_forest::Processor;
+    /// use tracing_forest::traits::*;
     /// use std::fs::File;
     /// 
     /// let out = File::create("out.log").unwrap();
@@ -295,9 +299,9 @@ where
     ///
     /// Allowing the subscriber to defer to stderr if the worker task finished.
     /// ```no_run
-    /// # #[tokio::main(flavor = "current_thread")]
+    /// # #[tokio::main]
     /// # async fn main() {
-    /// use tracing_forest::Processor;
+    /// use tracing_forest::traits::*;
     /// 
     /// tracing_forest::worker_task()
     ///     .map_sender(|sender| sender.or_stderr())
@@ -330,7 +334,7 @@ where
     /// through adding a fallback.
     /// ```compile_fail
     /// # use tracing_forest::Printer;
-    /// # #[tokio::main(flavor = "current_thread")]
+    /// # #[tokio::main]
     /// # async fn main() {
     /// tracing_forest::worker_task()
     ///     .map_sender(|_sender| {
@@ -360,6 +364,28 @@ where
     }
 
     /// Set the [`TagParser`].
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// use tracing_forest::{util::*, Tag};
+    /// 
+    /// fn simple_tag(event: &Event) -> Option<Tag> {
+    ///     // -- snip --
+    ///     # None
+    /// }
+    /// 
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     tracing_forest::worker_task()
+    ///         .set_tag(simple_tag)
+    ///         .build()
+    ///         .on(async {
+    ///             // ...
+    ///         })
+    ///         .await;
+    /// }
+    /// ```
     pub fn set_tag<T2>(self, tag: T2) -> LayerBuilder<Tx, Rx, T2>
     where
         T2: TagParser,
@@ -379,11 +405,31 @@ where
     /// it allows logs to be be collected across multithreaded environments. Not
     /// setting globally is intended for test functions, which need to set a new
     /// subscriber multiple times in the same program.
+    /// 
+    /// # Examples
+    /// 
+    /// For multithreaded tests, `set_global` can be used so that the subscriber
+    /// applies to all the threads. However, each function that sets a global
+    /// subscriber must be in its own compilation unit, like an integration test,
+    /// otherwise the global subscriber will carry over across tests.
+    /// ```
+    /// #[tokio::test(flavor = "multi_thread")]
+    /// async fn test_multithreading() {
+    ///     let logs = tracing_forest::capture()
+    ///         .set_global(true)
+    ///         .build()
+    ///         .on(async {
+    ///             // spawn some tasks
+    ///         })
+    ///         .await;
+    ///     
+    ///     // inspect logs...
+    /// }
+    /// ```
     pub fn set_global(mut self, is_global: bool) -> Self {
         self.is_global = is_global;
         self
     }
-
 
     /// Finishes the `ForestLayer` by composing it into a [`Registry`], and
     /// returns it as a [`Runtime`].

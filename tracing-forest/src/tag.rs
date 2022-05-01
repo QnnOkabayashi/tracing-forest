@@ -45,7 +45,6 @@
 //!         "admin" | "request" => Tag::build(|builder| builder.prefix(target).level(level)),
 //!         _ => return None,
 //!     })
-//!
 //! }
 //!
 //! #[tokio::main]
