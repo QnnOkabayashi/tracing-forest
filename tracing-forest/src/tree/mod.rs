@@ -3,7 +3,7 @@
 //! This module provides methods used for log inspection when using [`capture`].
 //! It consists of three types: [`Tree`], [`Span`], and [`Event`].
 //!
-//! [`capture`]: crate::builder::capture
+//! [`capture`]: crate::runtime::capture
 use crate::tag::Tag;
 #[cfg(feature = "chrono")]
 use chrono::{DateTime, Utc};
@@ -32,7 +32,7 @@ pub(crate) use field::FieldSet;
 ///
 /// [`event`]: Tree::event
 /// [`span`]: Tree::span
-/// [`capture`]: crate::builder::capture
+/// [`capture`]: crate::runtime::capture
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum Tree {
@@ -154,7 +154,7 @@ impl Tree {
     /// }
     /// ```
     ///
-    /// [`capture`]: crate::builder::capture
+    /// [`capture`]: crate::runtime::capture
     pub fn event(&self) -> Result<&Event, ExpectedEventError> {
         match self {
             Tree::Event(event) => Ok(event),
@@ -194,7 +194,7 @@ impl Tree {
     /// }
     /// ```
     ///
-    /// [`capture`]: crate::builder::capture
+    /// [`capture`]: crate::runtime::capture
     pub fn span(&self) -> Result<&Span, ExpectedSpanError> {
         match self {
             Tree::Event(_) => Err(ExpectedSpanError(())),

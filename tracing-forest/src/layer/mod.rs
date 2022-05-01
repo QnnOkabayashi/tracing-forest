@@ -341,7 +341,7 @@ where
 /// To use a worker task, consider using the [`worker_task`] function. Alternatively,
 /// configure a `Subscriber` manually using a `ForestLayer`.
 ///
-/// [`worker_task`]: crate::builder::worker_task
+/// [`worker_task`]: crate::runtime::worker_task
 ///
 /// # Examples
 /// ```

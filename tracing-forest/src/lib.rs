@@ -64,7 +64,7 @@
 //!         .await;
 //! }
 //! ```
-//! For useful configuration abstractions, see the [`builder` module documentation][builder].
+//! For useful configuration abstractions, see the [`runtime` module documentation][runtime].
 //!
 //! # Contextual coherence in action
 //!
@@ -292,8 +292,8 @@ pub use processor::Processor;
 pub use tag::Tag;
 
 cfg_tokio! {
-    pub mod builder;
-    pub use builder::{capture, worker_task};
+    pub mod runtime;
+    pub use runtime::{capture, worker_task};
 }
 
 cfg_uuid! {

@@ -2,7 +2,7 @@
 //! 
 //! This module provides useful abstractions for executing async code:
 //! [`worker_task`] for `main` functions, and [`capture`] for unit tests,
-//! both of which return a configurable [`LayerBuilder`] object.
+//! both of which return a configurable [`Builder`] object.
 //! 
 //! # Nonblocking log processing with `worker_task`
 //! 
@@ -47,7 +47,7 @@
 //! INFO     ┕━ ｉ [info]: Relevant information
 //! ```
 //! 
-//! For full configuration options, see the [`LayerBuilder`] documentation.
+//! For full configuration options, see the [`Builder`] documentation.
 //! 
 //! # Inspecting trace data in unit tests with `capture`
 //! 
@@ -100,7 +100,7 @@
 //! Additional options for tree inspection can be found in the
 //! [`tree` module-level documentation](crate::tree)
 //! 
-//! For full configuration options, see the [`LayerBuilder`] documentation.
+//! For full configuration options, see the [`Builder`] documentation.
 use crate::layer::ForestLayer;
 use crate::printer::{Printer, PrettyPrinter};
 use crate::tree::Tree;
@@ -118,7 +118,7 @@ use tracing_subscriber::layer::{Layered, SubscriberExt as _};
 /// Begins the configuration of a `ForestLayer` subscriber that sends log trees
 /// to a processing task for formatting and writing.
 /// 
-/// For full configuration options, see [`LayerBuilder`].
+/// For full configuration options, see [`Builder`].
 /// 
 /// For a high-level overview on usage, see the [module-level documentation][nonblocking-processing]
 /// for more details.
@@ -129,16 +129,16 @@ use tracing_subscriber::layer::{Layered, SubscriberExt as _};
 /// to detect logs in multithreading scenarios, but prevents setting other [`Subscriber`]s
 /// globally afterwards. This can be disabled via the [`set_global`] method.
 /// 
-/// [nonblocking-processing]: crate::builder#nonblocking-log-processing-with-worker_task
-/// [`set_global`]: LayerBuilder::set_global
-pub fn worker_task() -> LayerBuilder<InnerSender<impl Processor>, Process<PrettyPrinter>, NoTag> {
+/// [nonblocking-processing]: crate::runtime#nonblocking-log-processing-with-worker_task
+/// [`set_global`]: Builder::set_global
+pub fn worker_task() -> Builder<InnerSender<impl Processor>, Process<PrettyPrinter>, NoTag> {
     worker_task_inner(Process(Printer::new()), true)
 }
 
 /// Begins the configuration of a `ForestLayer` subscriber that sends log trees
 /// to a buffer that can later be inspected programatically.
 /// 
-/// For full configuration options, see [`LayerBuilder`].
+/// For full configuration options, see [`Builder`].
 /// 
 /// For a high-level overview on usage, see the [module-level documentation][inspecting-trace-data]
 /// for more details.
@@ -149,13 +149,13 @@ pub fn worker_task() -> LayerBuilder<InnerSender<impl Processor>, Process<Pretty
 /// allows multiple unit tests in the same file, but prevents trace data from other
 /// threads to be collected. This can be enabled via the [`set_global`] method.
 /// 
-/// [inspecting-trace-data]: crate::builder#inspecting-trace-data-in-unit-tests-with-capture
-/// [`set_global`]: LayerBuilder::set_global
-pub fn capture() -> LayerBuilder<InnerSender<impl Processor>, Capture, NoTag> {
+/// [inspecting-trace-data]: crate::runtime#inspecting-trace-data-in-unit-tests-with-capture
+/// [`set_global`]: Builder::set_global
+pub fn capture() -> Builder<InnerSender<impl Processor>, Capture, NoTag> {
     worker_task_inner(Capture(()), false)
 }
 
-fn worker_task_inner<P>(worker_processor: P, is_global: bool) -> LayerBuilder<InnerSender<impl Processor>, P, NoTag> {
+fn worker_task_inner<P>(worker_processor: P, is_global: bool) -> Builder<InnerSender<impl Processor>, P, NoTag> {
     let (tx, rx) = mpsc::unbounded_channel();
 
     let sender_processor = processor::from_fn(move |tree| tx
@@ -166,7 +166,7 @@ fn worker_task_inner<P>(worker_processor: P, is_global: bool) -> LayerBuilder<In
         })
     );
 
-    LayerBuilder {
+    Builder {
         sender_processor: InnerSender(sender_processor),
         worker_processor,
         receiver: rx,
@@ -179,7 +179,7 @@ fn worker_task_inner<P>(worker_processor: P, is_global: bool) -> LayerBuilder<In
 /// 
 /// # Configuring a `Runtime`
 /// 
-/// `LayerBuilder` follows the [builder pattern][builder] to configure a [`Runtime`].
+/// `Builder` follows the [builder pattern][builder] to configure a [`Runtime`].
 /// 
 /// Configuration options include:
 /// * Setting the [tag][set_tag].
@@ -193,13 +193,13 @@ fn worker_task_inner<P>(worker_processor: P, is_global: bool) -> LayerBuilder<In
 /// which is used in the returned `Runtime`.
 /// 
 /// [builder]: https://rust-lang.github.io/api-guidelines/type-safety.html#builders-enable-construction-of-complex-values-c-builder
-/// [set_tag]: LayerBuilder::set_tag
-/// [set_global]: LayerBuilder::set_global
-/// [map_sender]: LayerBuilder::map_sender
-/// [map_receiver]: LayerBuilder::map_receiver
-/// [`build`]: LayerBuilder::build
-/// [`build_on`]: LayerBuilder::build_on
-pub struct LayerBuilder<Tx, Rx, T> {
+/// [set_tag]: Builder::set_tag
+/// [set_global]: Builder::set_global
+/// [map_sender]: Builder::map_sender
+/// [map_receiver]: Builder::map_receiver
+/// [`build`]: Builder::build
+/// [`build_on`]: Builder::build_on
+pub struct Builder<Tx, Rx, T> {
     sender_processor: Tx,
     worker_processor: Rx,
     receiver: UnboundedReceiver<Tree>,
@@ -234,7 +234,7 @@ impl<P> sealed::Sealed for InnerSender<P> {}
 
 impl<S: sealed::Sealed, P> sealed::Sealed for WithFallback<S, P> {}
 
-impl<Tx, P, T> LayerBuilder<Tx, Process<P>, T>
+impl<Tx, P, T> Builder<Tx, Process<P>, T>
 where
     P: Processor,
 {
@@ -271,12 +271,12 @@ where
     ///     .await;
     /// # }
     /// ```
-    pub fn map_receiver<F, P2>(self, f: F) -> LayerBuilder<Tx, Process<P2>, T>
+    pub fn map_receiver<F, P2>(self, f: F) -> Builder<Tx, Process<P2>, T>
     where
         F: FnOnce(P) -> P2,
         P2: Processor,
     {
-        LayerBuilder {
+        Builder {
             sender_processor: self.sender_processor,
             worker_processor: Process(f(self.worker_processor.0)),
             receiver: self.receiver,
@@ -286,7 +286,7 @@ where
     }
 }
 
-impl<Tx, Rx, T> LayerBuilder<Tx, Rx, T>
+impl<Tx, Rx, T> Builder<Tx, Rx, T>
 where
     Tx: Processor + sealed::Sealed,
     T: TagParser,
@@ -348,12 +348,12 @@ where
     ///     .await;
     /// # }
     /// ```
-    pub fn map_sender<F, Tx2>(self, f: F) -> LayerBuilder<Tx2, Rx, T>
+    pub fn map_sender<F, Tx2>(self, f: F) -> Builder<Tx2, Rx, T>
     where
         F: FnOnce(Tx) -> Tx2,
         Tx2: Processor + sealed::Sealed,
     {
-        LayerBuilder {
+        Builder {
             sender_processor: f(self.sender_processor),
             worker_processor: self.worker_processor,
             receiver: self.receiver,
@@ -386,11 +386,11 @@ where
     ///         .await;
     /// }
     /// ```
-    pub fn set_tag<T2>(self, tag: T2) -> LayerBuilder<Tx, Rx, T2>
+    pub fn set_tag<T2>(self, tag: T2) -> Builder<Tx, Rx, T2>
     where
         T2: TagParser,
     {
-        LayerBuilder {
+        Builder {
             sender_processor: self.sender_processor,
             worker_processor: self.worker_processor,
             receiver: self.receiver,
@@ -438,8 +438,8 @@ where
     /// a more advanced configuration, see the [`build_on`] and [`build_with`]
     /// methods.
     /// 
-    /// [`build_on`]: LayerBuilder::build_on
-    /// [`build_with`]: LayerBuilder::build_with
+    /// [`build_on`]: Builder::build_on
+    /// [`build_with`]: Builder::build_with
     /// 
     /// # Examples
     /// 
@@ -469,9 +469,9 @@ where
     /// defined in [`tracing-subscriber`s documentation]. For a basic configuration,
     /// see the [`build`] method.
     /// 
-    /// [`build_with`]: LayerBuilder::build_with
+    /// [`build_with`]: Builder::build_with
     /// [`tracing-subscriber`s documentation]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/index.html#composing-layers
-    /// [`build`]: LayerBuilder::build
+    /// [`build`]: Builder::build
     /// 
     /// # Examples
     /// 
@@ -508,9 +508,9 @@ where
     /// defined in [`tracing-subscriber`s documentation]. For a basic configuration,
     /// see the [`build`] method.
     /// 
-    /// [`build_on`]: LayerBuilder::build_on
+    /// [`build_on`]: Builder::build_on
     /// [`tracing-subscriber`s documentation]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/index.html#composing-layers
-    /// [`build`]: LayerBuilder::build
+    /// [`build`]: Builder::build
     /// 
     /// # Examples
     /// 
@@ -552,7 +552,7 @@ where
 
 /// Execute a `Future` in the context of a subscriber with a `ForestLayer`.
 /// 
-/// This type is returned by [`LayerBuilder::build`] and [`LayerBuilder::build_with`].
+/// This type is returned by [`Builder::build`] and [`Builder::build_with`].
 pub struct Runtime<S, P> {
     subscriber: S,
     worker_processor: P, // either `Process<_>` or `Capture`

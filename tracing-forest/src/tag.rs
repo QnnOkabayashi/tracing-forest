@@ -22,11 +22,11 @@
 //! signature.
 //!
 //! Once the function is defined, it can either be passed directly to [`ForestLayer::new`],
-//! or can be passed to [`LayerBuilder::set_tag`].
+//! or can be passed to [`Builder::set_tag`].
 //!
 //! [`ForestLayer`]: crate::layer::ForestLayer
 //! [`ForestLayer::new`]: crate::layer::ForestLayer::new
-//! [`LayerBuilder::set_tag`]: crate::builder::LayerBuilder::set_tag
+//! [`Builder::set_tag`]: crate::runtime::Builder::set_tag
 //!
 //! ## Examples
 //!

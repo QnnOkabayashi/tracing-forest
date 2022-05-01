@@ -131,7 +131,7 @@ pub struct FromFn<F>(F);
 /// // -- snip --
 /// ```
 ///
-/// [`worker_task`]: crate::builder::worker_task
+/// [`worker_task`]: crate::runtime::worker_task
 pub fn from_fn<F>(f: F) -> FromFn<F>
 where
     F: 'static + Fn(Tree) -> Result,
