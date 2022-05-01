@@ -14,13 +14,11 @@ use thiserror::Error;
 use tracing::Level;
 #[cfg(feature = "uuid")]
 use uuid::Uuid;
+
+mod field;
 #[cfg(feature = "serde")]
 mod ser;
 
-// mod error;
-// pub use error::{ExpectedEventError, ExpectedSpanError};
-
-mod field;
 pub use field::Field;
 pub(crate) use field::FieldSet;
 
