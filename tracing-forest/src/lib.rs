@@ -225,7 +225,7 @@
 //! certain use cases.
 //!
 //! To resolve this, the `immediate` field can be used on an event to print the
-//! event and it's parent spans to stderr. Unlike `eprintln!`, the event will
+//! event and its parent spans to stderr. Unlike `eprintln!`, the event will
 //! still appear in the trace tree written once the root span closes.
 //!
 //! ## Example
