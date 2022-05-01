@@ -108,8 +108,8 @@ impl<'a> MakeWriter<'a> for MakeStderr {
 /// A [`Processor`] that pretty-prints to stdout.
 pub type PrettyPrinter = Printer<Pretty, MakeStdout>;
 
-impl Printer<Pretty, MakeStdout> {
-    /// Returns a new [`Printer`] that pretty-prints to stdout.
+impl PrettyPrinter {
+    /// Returns a new [`PrettyPrinter`] that pretty-prints to stdout.
     ///
     /// Use [`Printer::formatter`] and [`Printer::writer`] for custom configuration.
     pub const fn new() -> Self {
@@ -150,9 +150,9 @@ where
     }
 }
 
-impl Default for Printer<Pretty, MakeStdout> {
+impl Default for PrettyPrinter {
     fn default() -> Self {
-        Printer::new()
+        PrettyPrinter::new()
     }
 }
 

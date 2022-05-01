@@ -102,7 +102,7 @@
 //! 
 //! For full configuration options, see the [`Builder`] documentation.
 use crate::layer::ForestLayer;
-use crate::printer::{Printer, PrettyPrinter};
+use crate::printer::PrettyPrinter;
 use crate::tree::Tree;
 use crate::fail;
 use crate::tag::{TagParser, NoTag};
@@ -132,7 +132,7 @@ use tracing_subscriber::layer::{Layered, SubscriberExt as _};
 /// [nonblocking-processing]: crate::runtime#nonblocking-log-processing-with-worker_task
 /// [`set_global`]: Builder::set_global
 pub fn worker_task() -> Builder<InnerSender<impl Processor>, WorkerTask<PrettyPrinter>, NoTag> {
-    worker_task_inner(WorkerTask(Printer::new()), true)
+    worker_task_inner(WorkerTask(PrettyPrinter::new()), true)
 }
 
 /// Begins the configuration of a `ForestLayer` subscriber that sends log trees
@@ -333,13 +333,14 @@ where
     /// some derivation of the sender. Currently, the only accepted wrapping is
     /// through adding a fallback.
     /// ```compile_fail
-    /// # use tracing_forest::Printer;
+    /// use tracing_forest::PrettyPrinter;
+    /// 
     /// # #[tokio::main]
     /// # async fn main() {
     /// tracing_forest::worker_task()
     ///     .map_sender(|_sender| {
     ///         // Some variation of the sender isn't returned, so this won't compile.
-    ///         Printer::default()
+    ///         PrettyPrinter::new()
     ///     })
     ///     .build()
     ///     .on(async {

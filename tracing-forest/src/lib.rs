@@ -287,7 +287,7 @@ mod fail;
 mod layer;
 
 pub use layer::{init, ForestLayer};
-pub use printer::{Formatter, Printer};
+pub use printer::{Formatter, PrettyPrinter, Printer};
 pub use processor::Processor;
 pub use tag::Tag;
 
