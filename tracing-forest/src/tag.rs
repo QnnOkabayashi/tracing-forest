@@ -37,7 +37,7 @@
 //! fn simple_tag(event: &Event) -> Option<Tag> {
 //!     let target = event.metadata().target();
 //!     let level = *event.metadata().level();
-//! 
+//!
 //!     Some(match target {
 //!         "security" if level == Level::ERROR => {
 //!             Tag::build(|builder| builder.prefix(target).suffix("critical").icon('🔐'))
@@ -45,7 +45,7 @@
 //!         "admin" | "request" => Tag::build(|builder| builder.prefix(target).level(level)),
 //!         _ => return None,
 //!     })
-//! 
+//!
 //! }
 //!
 //! #[tokio::main]
@@ -94,13 +94,13 @@ pub struct Tag {
 
 impl Tag {
     /// Build a new [`Tag`].
-    /// 
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```
     /// use tracing_forest::Tag;
-    /// 
-    /// let tag = Tag::build(|builder| builder.prefix(target).suffix("critical").icon('🔐'));
+    ///
+    /// let tag = Tag::build(|builder| builder.prefix("security").suffix("critical").icon('🔐'));
     /// ```
     pub fn build(f: impl FnOnce(Builder<Empty, Empty>) -> Builder<Suffix, Icon>) -> Self {
         let builder = f(Builder {
