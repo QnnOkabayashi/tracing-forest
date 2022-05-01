@@ -134,9 +134,7 @@ impl Tag {
 
 /// Incrementally construct [`Tag`]s.
 ///
-/// This type uses generics to indicate when a field has been provided so that
-/// [`Builder::finish`] can only be called once all the required fields have
-/// been provided.
+/// See [`Tag::build`] for more details.
 pub struct Builder<S, I> {
     prefix: Option<&'static str>,
     suffix: S,
