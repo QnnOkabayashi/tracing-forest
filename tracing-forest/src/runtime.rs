@@ -131,8 +131,8 @@ use tracing_subscriber::layer::{Layered, SubscriberExt as _};
 /// 
 /// [nonblocking-processing]: crate::runtime#nonblocking-log-processing-with-worker_task
 /// [`set_global`]: Builder::set_global
-pub fn worker_task() -> Builder<InnerSender<impl Processor>, Process<PrettyPrinter>, NoTag> {
-    worker_task_inner(Process(Printer::new()), true)
+pub fn worker_task() -> Builder<InnerSender<impl Processor>, WorkerTask<PrettyPrinter>, NoTag> {
+    worker_task_inner(WorkerTask(Printer::new()), true)
 }
 
 /// Begins the configuration of a `ForestLayer` subscriber that sends log trees
@@ -211,7 +211,7 @@ pub struct Builder<Tx, Rx, T> {
 pub struct Capture(());
 
 /// A marker type indicating that trace data should be processed.
-pub struct Process<P>(P);
+pub struct WorkerTask<P>(P);
 
 /// The [`Processor`] used within a `tracing-forest` subscriber for sending logs
 /// to a processing task.
@@ -234,7 +234,7 @@ impl<P> sealed::Sealed for InnerSender<P> {}
 
 impl<S: sealed::Sealed, P> sealed::Sealed for WithFallback<S, P> {}
 
-impl<Tx, P, T> Builder<Tx, Process<P>, T>
+impl<Tx, P, T> Builder<Tx, WorkerTask<P>, T>
 where
     P: Processor,
 {
@@ -271,14 +271,14 @@ where
     ///     .await;
     /// # }
     /// ```
-    pub fn map_receiver<F, P2>(self, f: F) -> Builder<Tx, Process<P2>, T>
+    pub fn map_receiver<F, P2>(self, f: F) -> Builder<Tx, WorkerTask<P2>, T>
     where
         F: FnOnce(P) -> P2,
         P2: Processor,
     {
         Builder {
             sender_processor: self.sender_processor,
-            worker_processor: Process(f(self.worker_processor.0)),
+            worker_processor: WorkerTask(f(self.worker_processor.0)),
             receiver: self.receiver,
             tag: self.tag,
             is_global: self.is_global,
@@ -560,7 +560,7 @@ pub struct Runtime<S, P> {
     is_global: bool,
 }
 
-impl<S, P> Runtime<S, Process<P>>
+impl<S, P> Runtime<S, WorkerTask<P>>
 where
     S: Subscriber + Send + Sync,
     P: Processor + Send,
