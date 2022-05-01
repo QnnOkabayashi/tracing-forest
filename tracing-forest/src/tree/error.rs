@@ -5,13 +5,13 @@ use std::fmt;
 ///
 /// [event]: crate::tree::Tree::event
 #[derive(Debug)]
-pub struct ExpectedEventError;
+pub struct ExpectedEventError(pub(super) ());
 
 /// Error returned by [`Tree::span`][span].
 ///
 /// [span]: crate::tree::Tree::span
 #[derive(Debug)]
-pub struct ExpectedSpanError;
+pub struct ExpectedSpanError(pub(super) ());
 
 impl Error for ExpectedEventError {}
 

@@ -108,9 +108,12 @@ impl Pretty {
 
     fn format_event(event: &Event, writer: &mut String) -> fmt::Result {
         let tag = event.tag().unwrap_or_else(|| Tag::from(event.level()));
-        let message = event.message().unwrap_or("");
 
-        write!(writer, "{} [{}]: {}", tag.icon(), tag, message)?;
+        write!(writer, "{} [{}]: ", tag.icon(), tag)?;
+
+        if let Some(message) = event.message() {
+            writer.write_str(message)?;
+        }
 
         for field in event.fields().iter() {
             write!(writer, " | {}: {}", field.key(), field.value())?;
@@ -145,7 +148,7 @@ impl Pretty {
 
         writeln!(writer, "{:.2}% ]", percent_total_of_root_duration)?;
 
-        if let Some((last, remaining)) = span.children().split_last() {
+        if let Some((last, remaining)) = span.nodes().split_last() {
             match indent.last_mut() {
                 Some(edge @ Indent::Turn) => *edge = Indent::Null,
                 Some(edge @ Indent::Fork) => *edge = Indent::Line,

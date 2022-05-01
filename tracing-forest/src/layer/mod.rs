@@ -41,7 +41,7 @@ impl OpenedSpan {
 
                     if let Ok(()) = write!(remaining, "{:?}", value) {
                         let len = LENGTH - remaining.len();
-                        if let Ok(parsed) = id::try_parse(&buf[..len]) {
+                        if let Some(parsed) = id::try_parse(&buf[..len]) {
                             maybe_uuid = Some(parsed);
                         }
                     }
@@ -56,7 +56,7 @@ impl OpenedSpan {
                     Some(parent) => parent
                         .extensions()
                         .get::<OpenedSpan>()
-                        .unwrap_or_else(fail::opened_span_not_in_exts)
+                        .expect(fail::OPENED_SPAN_NOT_IN_EXTENSIONS)
                         .span
                         .uuid(),
                     None => Uuid::new_v4(),
@@ -100,12 +100,12 @@ impl OpenedSpan {
             event
         };
 
-        self.span.children.push(Tree::Event(event));
+        self.span.nodes.push(Tree::Event(event));
     }
 
     fn record_span(&mut self, span: tree::Span) {
         self.span.inner_duration += span.total_duration();
-        self.span.children.push(Tree::Span(span));
+        self.span.nodes.push(Tree::Span(span));
     }
 
     #[cfg(feature = "uuid")]
@@ -158,7 +158,7 @@ where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
     fn on_new_span(&self, attrs: &Attributes, id: &Id, ctx: Context<S>) {
-        let span = ctx.span(id).unwrap_or_else(fail::span_not_in_ctx);
+        let span = ctx.span(id).expect(fail::SPAN_NOT_IN_CONTEXT);
         let opened = OpenedSpan::new(attrs, &ctx);
 
         let mut extensions = span.extensions_mut();
@@ -222,40 +222,40 @@ where
             Some(parent) => parent
                 .extensions_mut()
                 .get_mut::<OpenedSpan>()
-                .unwrap_or_else(fail::opened_span_not_in_exts)
+                .expect(fail::OPENED_SPAN_NOT_IN_EXTENSIONS)
                 .record_event(tree_event),
             None => self
                 .processor
                 .process(Tree::Event(tree_event))
-                .unwrap_or_else(fail::processing_error),
+                .expect(fail::PROCESSING_ERROR),
         }
     }
 
     fn on_enter(&self, id: &Id, ctx: Context<S>) {
         ctx.span(id)
-            .unwrap_or_else(fail::span_not_in_ctx)
+            .expect(fail::SPAN_NOT_IN_CONTEXT)
             .extensions_mut()
             .get_mut::<OpenedSpan>()
-            .unwrap_or_else(fail::opened_span_not_in_exts)
+            .expect(fail::OPENED_SPAN_NOT_IN_EXTENSIONS)
             .enter();
     }
 
     fn on_exit(&self, id: &Id, ctx: Context<S>) {
         ctx.span(id)
-            .unwrap_or_else(fail::span_not_in_ctx)
+            .expect(fail::SPAN_NOT_IN_CONTEXT)
             .extensions_mut()
             .get_mut::<OpenedSpan>()
-            .unwrap_or_else(fail::opened_span_not_in_exts)
+            .expect(fail::OPENED_SPAN_NOT_IN_EXTENSIONS)
             .exit();
     }
 
     fn on_close(&self, id: Id, ctx: Context<S>) {
-        let span_ref = ctx.span(&id).unwrap_or_else(fail::span_not_in_ctx);
+        let span_ref = ctx.span(&id).expect(fail::SPAN_NOT_IN_CONTEXT);
 
         let mut span = span_ref
             .extensions_mut()
             .remove::<OpenedSpan>()
-            .unwrap_or_else(fail::opened_span_not_in_exts)
+            .expect(fail::OPENED_SPAN_NOT_IN_EXTENSIONS)
             .close();
 
         // Ensure that the total duration is at least as much as the inner
@@ -273,12 +273,12 @@ where
             Some(parent) => parent
                 .extensions_mut()
                 .get_mut::<OpenedSpan>()
-                .unwrap_or_else(fail::opened_span_not_in_exts)
+                .expect(fail::OPENED_SPAN_NOT_IN_EXTENSIONS)
                 .record_span(span),
             None => self
                 .processor
                 .process(Tree::Span(span))
-                .unwrap_or_else(fail::processing_error),
+                .expect(fail::PROCESSING_ERROR),
         }
     }
 }
@@ -298,7 +298,7 @@ where
         let uuid = span
             .extensions()
             .get::<OpenedSpan>()
-            .unwrap_or_else(fail::opened_span_not_in_exts)
+            .expect(fail::OPENED_SPAN_NOT_IN_EXTENSIONS)
             .span
             .uuid();
         write!(writer, "{} ", uuid)?;

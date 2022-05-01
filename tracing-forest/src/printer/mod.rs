@@ -164,12 +164,12 @@ where
     fn process(&self, tree: Tree) -> processor::Result {
         let string = match self.formatter.fmt(&tree) {
             Ok(s) => s,
-            Err(e) => return Err((tree, e.into())),
+            Err(e) => return Err(processor::error(tree, e.into())),
         };
 
         match self.make_writer.make_writer().write_all(string.as_bytes()) {
             Ok(()) => Ok(()),
-            Err(e) => Err((tree, e.into())),
+            Err(e) => Err(processor::error(tree, e.into())),
         }
     }
 }

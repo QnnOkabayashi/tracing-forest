@@ -5,7 +5,6 @@
 //!
 //! [`capture`]: crate::builder::capture
 use crate::tag::Tag;
-// use crate::{cfg_chrono, cfg_uuid};
 #[cfg(feature = "chrono")]
 use chrono::{DateTime, Utc};
 #[cfg(feature = "serde")]
@@ -88,7 +87,7 @@ pub struct Span {
     pub(crate) inner_duration: Duration,
 
     /// Events and spans collected while the span was open.
-    pub(crate) children: Vec<Tree>,
+    pub(crate) nodes: Vec<Tree>,
 }
 
 #[derive(Clone, Debug)]
@@ -144,7 +143,7 @@ impl Tree {
     pub fn event(&self) -> Result<&Event, ExpectedEventError> {
         match self {
             Tree::Event(event) => Ok(event),
-            Tree::Span(_) => Err(ExpectedEventError),
+            Tree::Span(_) => Err(ExpectedEventError(())),
         }
     }
 
@@ -183,7 +182,7 @@ impl Tree {
     /// [`capture`]: crate::builder::capture
     pub fn span(&self) -> Result<&Span, ExpectedSpanError> {
         match self {
-            Tree::Event(_) => Err(ExpectedSpanError),
+            Tree::Event(_) => Err(ExpectedSpanError(())),
             Tree::Span(span) => Ok(span),
         }
     }
@@ -230,7 +229,7 @@ impl Span {
             name,
             total_duration: Duration::ZERO,
             inner_duration: Duration::ZERO,
-            children: Vec::new(),
+            nodes: Vec::new(),
         }
     }
 
@@ -257,8 +256,8 @@ impl Span {
     }
 
     /// Returns the span's child trees.
-    pub fn children(&self) -> &[Tree] {
-        &self.children
+    pub fn nodes(&self) -> &[Tree] {
+        &self.nodes
     }
 
     /// Returns the total duration the span was entered for.

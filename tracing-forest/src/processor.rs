@@ -3,11 +3,37 @@
 //! See [`Processor`] for more details.
 use crate::printer::{MakeStderr, MakeStdout, Pretty, Printer};
 use crate::tree::Tree;
-use std::error::Error;
 use std::sync::Arc;
+use std::{error, fmt};
+
+/// Error type returned if a [`Processor`] fails.
+#[derive(Debug)]
+pub struct Error {
+    /// The recoverable [`Tree`] type that couldn't be processed.
+    pub tree: Tree,
+
+    error: Box<dyn error::Error + Send + Sync>,
+}
+
+/// Create an error for when a [`Processor`] fails to process a [`Tree`].
+pub fn error(tree: Tree, error: Box<dyn error::Error + Send + Sync>) -> Error {
+    Error { tree, error }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.error.fmt(f)
+    }
+}
+
+impl error::Error for Error {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        self.error.source()
+    }
+}
 
 /// The result type of [`Processor::process`].
-pub type Result = std::result::Result<(), (Tree, Box<dyn Error + Send + Sync>)>;
+pub type Result = std::result::Result<(), Error>;
 
 /// A trait for processing completed [`Tree`]s.
 ///
@@ -108,7 +134,7 @@ pub struct FromFn<F>(F);
 ///     .send(tree)
 ///     .map_err(|err| {
 ///         let msg = err.to_string().into();
-///         (err.0, msg)
+///         processor::error(err.0, msg)
 ///     })
 /// );
 ///
@@ -129,9 +155,9 @@ where
     F: Processor,
 {
     fn process(&self, tree: Tree) -> Result {
-        self.primary.process(tree).or_else(|(tree, err)| {
+        self.primary.process(tree).or_else(|err| {
             eprintln!("{}, using fallback processor...", err);
-            self.fallback.process(tree)
+            self.fallback.process(err.tree)
         })
     }
 }

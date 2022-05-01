@@ -87,9 +87,9 @@
 //!     assert!(my_span.name() == "my_span");
 //! 
 //!     // Only the `info` event is recorded
-//!     assert!(my_span.children().len() == 1);
+//!     assert!(my_span.nodes().len() == 1);
 //! 
-//!     let relevant_info: &Event = my_span.children()[0].event()?;
+//!     let relevant_info: &Event = my_span.nodes()[0].event()?;
 //! 
 //!     assert!(relevant_info.message() == Some("Relevant information"));
 //! 
@@ -162,7 +162,7 @@ fn worker_task_inner<P>(worker_processor: P, is_global: bool) -> LayerBuilder<In
         .send(tree)
         .map_err(|err| {
             let msg = err.to_string().into();
-            (err.0, msg)
+            processor::error(err.0, msg)
         })
     );
 
@@ -329,7 +329,7 @@ where
     /// some derivation of the sender. Currently, the only accepted wrapping is
     /// through adding a fallback.
     /// ```compile_fail
-    /// # use tracing_forest::processor::Printer;
+    /// # use tracing_forest::Printer;
     /// # #[tokio::main(flavor = "current_thread")]
     /// # async fn main() {
     /// tracing_forest::worker_task()
@@ -409,7 +409,7 @@ where
     /// }
     /// ```
     pub fn build(self) -> Runtime<Layered<ForestLayer<Tx, T>, Registry>, Rx> {
-        self.build_with(|layer| Registry::default().with(layer))
+        self.build_on(|x| x)
     }
 
     /// Finishes the `ForestLayer` by calling a function to build a `Subscriber`,
@@ -528,7 +528,7 @@ where
         let handle = tokio::spawn(async move {
             loop {
                 tokio::select! {
-                    Some(tree) = receiver.recv() => processor.process(tree).unwrap_or_else(fail::processing_error),
+                    Some(tree) = receiver.recv() => processor.process(tree).expect(fail::PROCESSING_ERROR),
                     Ok(()) = &mut shutdown_rx => break,
                     else => break,
                 }
@@ -538,7 +538,7 @@ where
 
             // Drain any remaining logs in the channel buffer.
             while let Ok(tree) = receiver.try_recv() {
-                processor.process(tree).unwrap_or_else(fail::processing_error);
+                processor.process(tree).expect(fail::PROCESSING_ERROR);
             }
         });
 
