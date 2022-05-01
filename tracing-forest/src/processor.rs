@@ -3,33 +3,23 @@
 //! See [`Processor`] for more details.
 use crate::printer::{MakeStderr, MakeStdout, Pretty, Printer};
 use crate::tree::Tree;
+use std::error;
 use std::sync::Arc;
-use std::{error, fmt};
+use thiserror::Error;
 
 /// Error type returned if a [`Processor`] fails.
-#[derive(Debug)]
+#[derive(Error, Debug)]
+#[error("{source}")]
 pub struct Error {
     /// The recoverable [`Tree`] type that couldn't be processed.
     pub tree: Tree,
 
-    error: Box<dyn error::Error + Send + Sync>,
+    source: Box<dyn error::Error + Send + Sync>,
 }
 
 /// Create an error for when a [`Processor`] fails to process a [`Tree`].
-pub fn error(tree: Tree, error: Box<dyn error::Error + Send + Sync>) -> Error {
-    Error { tree, error }
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.error.fmt(f)
-    }
-}
-
-impl error::Error for Error {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        self.error.source()
-    }
+pub fn error(tree: Tree, source: Box<dyn error::Error + Send + Sync>) -> Error {
+    Error { tree, source }
 }
 
 /// The result type of [`Processor::process`].

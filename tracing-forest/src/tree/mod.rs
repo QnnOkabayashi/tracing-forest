@@ -10,14 +10,15 @@ use chrono::{DateTime, Utc};
 #[cfg(feature = "serde")]
 use serde::Serialize;
 use std::time::Duration;
+use thiserror::Error;
 use tracing::Level;
 #[cfg(feature = "uuid")]
 use uuid::Uuid;
 #[cfg(feature = "serde")]
 mod ser;
 
-mod error;
-pub use error::{ExpectedEventError, ExpectedSpanError};
+// mod error;
+// pub use error::{ExpectedEventError, ExpectedSpanError};
 
 mod field;
 pub use field::Field;
@@ -106,6 +107,20 @@ pub(crate) struct Shared {
     #[cfg_attr(feature = "serde", serde(serialize_with = "ser::level"))]
     pub(crate) level: Level,
 }
+
+/// Error returned by [`Tree::event`][event].
+///
+/// [event]: crate::tree::Tree::event
+#[derive(Error, Debug)]
+#[error("Expected an event, found a span")]
+pub struct ExpectedEventError(());
+
+/// Error returned by [`Tree::span`][span].
+///
+/// [span]: crate::tree::Tree::span
+#[derive(Error, Debug)]
+#[error("Expected a span, found an event")]
+pub struct ExpectedSpanError(());
 
 impl Tree {
     /// Returns a reference to the inner [`Event`] if the tree is an event.

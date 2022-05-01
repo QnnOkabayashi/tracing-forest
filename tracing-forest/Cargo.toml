@@ -21,6 +21,7 @@ env-filter = ["tracing-subscriber/env-filter"]
 [dependencies]
 tracing = "0.1"
 tracing-subscriber = "0.3"
+thiserror = "1.0.31"
 
 [dependencies.uuid]
 version = "0.8"
