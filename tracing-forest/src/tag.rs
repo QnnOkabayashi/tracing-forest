@@ -200,19 +200,6 @@ impl<S, I> Builder<S, I> {
     }
 }
 
-impl Builder<Suffix, Icon> {
-    /// Finish building a [`Tag`].
-    ///
-    /// Note that this can only be called once the suffix and icon have been provided.
-    pub fn finish(self) -> Tag {
-        Tag {
-            prefix: self.prefix,
-            suffix: self.suffix.0,
-            icon: self.icon.0,
-        }
-    }
-}
-
 impl fmt::Display for Tag {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(prefix) = self.prefix {
