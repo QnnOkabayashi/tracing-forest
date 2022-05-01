@@ -94,6 +94,14 @@ pub struct Tag {
 
 impl Tag {
     /// Build a new [`Tag`].
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// use tracing_forest::Tag;
+    /// 
+    /// let tag = Tag::build(|builder| builder.prefix(target).suffix("critical").icon('🔐'));
+    /// ```
     pub fn build(f: impl FnOnce(Builder<Empty, Empty>) -> Builder<Suffix, Icon>) -> Self {
         let builder = f(Builder {
             prefix: None,
