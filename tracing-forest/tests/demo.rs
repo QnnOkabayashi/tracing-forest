@@ -24,18 +24,14 @@ fn pretty_example() {
             let target = event.metadata().target();
 
             let tag = match target {
-                "security" if level == Level::ERROR => Tag::builder()
-                    .set_icon('🔐')
-                    .set_prefix(target)
-                    .set_suffix("critical")
-                    .finish(),
-                "security" if level == Level::INFO => Tag::builder()
-                    .set_icon('🔓')
-                    .set_prefix(target)
-                    .set_suffix("access")
-                    .finish(),
+                "security" if level == Level::ERROR => {
+                    Tag::build(|builder| builder.icon('🔐').prefix(target).suffix("critical"))
+                }
+                "security" if level == Level::INFO => {
+                    Tag::build(|builder| builder.icon('🔓').prefix(target).suffix("access"))
+                }
                 "admin" | "request" | "filter" => {
-                    Tag::builder().set_prefix(target).set_level(level).finish()
+                    Tag::build(|builder| builder.prefix(target).level(level))
                 }
                 _ => return None,
             };

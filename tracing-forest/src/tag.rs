@@ -37,19 +37,15 @@
 //! fn simple_tag(event: &Event) -> Option<Tag> {
 //!     let target = event.metadata().target();
 //!     let level = *event.metadata().level();
-//!
+//! 
 //!     Some(match target {
-//!         "security" if level == Level::ERROR => Tag::builder()
-//!             .set_prefix(target)
-//!             .set_suffix("critical")
-//!             .set_icon('🔐')
-//!             .finish(),
-//!         "admin" | "request" => Tag::builder()
-//!             .set_prefix(target)
-//!             .set_level(level)
-//!             .finish(),
+//!         "security" if level == Level::ERROR => {
+//!             Tag::build(|builder| builder.prefix(target).suffix("critical").icon('🔐'))
+//!         }
+//!         "admin" | "request" => Tag::build(|builder| builder.prefix(target).level(level)),
 //!         _ => return None,
 //!     })
+//! 
 //! }
 //!
 //! #[tokio::main]
@@ -97,12 +93,18 @@ pub struct Tag {
 }
 
 impl Tag {
-    /// Create a new [`Builder`].
-    pub const fn builder() -> Builder<Empty, Empty> {
-        Builder {
+    /// Build a new [`Tag`].
+    pub fn build(f: impl FnOnce(Builder<Empty, Empty>) -> Builder<Suffix, Icon>) -> Self {
+        let builder = f(Builder {
             prefix: None,
             suffix: Empty(()),
             icon: Empty(()),
+        });
+
+        Tag {
+            prefix: builder.prefix,
+            suffix: builder.suffix.0,
+            icon: builder.icon.0,
         }
     }
 
@@ -127,7 +129,6 @@ impl Tag {
 /// This type uses generics to indicate when a field has been provided so that
 /// [`Builder::finish`] can only be called once all the required fields have
 /// been provided.
-#[derive(Copy, Clone)]
 pub struct Builder<S, I> {
     prefix: Option<&'static str>,
     suffix: S,
@@ -135,20 +136,17 @@ pub struct Builder<S, I> {
 }
 
 /// A type used by [`Builder`] to indicate that a field hasn't been set.
-#[derive(Copy, Clone)]
 pub struct Empty(());
 
 /// A type used by [`Builder`] to indicate that the suffix has been set.
-#[derive(Copy, Clone)]
 pub struct Suffix(&'static str);
 
 /// A type used by [`Builder`] to indicate that the icon has been set.
-#[derive(Copy, Clone)]
 pub struct Icon(char);
 
 impl<S, I> Builder<S, I> {
     /// Set the prefix.
-    pub fn set_prefix(self, prefix: &'static str) -> Builder<S, I> {
+    pub fn prefix(self, prefix: &'static str) -> Builder<S, I> {
         Builder {
             prefix: Some(prefix),
             ..self
@@ -156,7 +154,7 @@ impl<S, I> Builder<S, I> {
     }
 
     /// Set the suffix.
-    pub fn set_suffix(self, suffix: &'static str) -> Builder<Suffix, I> {
+    pub fn suffix(self, suffix: &'static str) -> Builder<Suffix, I> {
         Builder {
             prefix: self.prefix,
             suffix: Suffix(suffix),
@@ -165,7 +163,7 @@ impl<S, I> Builder<S, I> {
     }
 
     /// Set the icon.
-    pub fn set_icon(self, icon: char) -> Builder<S, Icon> {
+    pub fn icon(self, icon: char) -> Builder<S, Icon> {
         Builder {
             prefix: self.prefix,
             suffix: self.suffix,
@@ -177,7 +175,7 @@ impl<S, I> Builder<S, I> {
     ///
     /// If the `Tag` won't have a prefix, then `Tag::from(level)` can be used as
     /// a shorter alternative.
-    pub fn set_level(self, level: Level) -> Builder<Suffix, Icon> {
+    pub fn level(self, level: Level) -> Builder<Suffix, Icon> {
         let (suffix, icon) = match level {
             Level::TRACE => ("trace", '📍'),
             Level::DEBUG => ("debug", '🐛'),
@@ -219,7 +217,7 @@ impl fmt::Display for Tag {
 
 impl From<Level> for Tag {
     fn from(level: Level) -> Self {
-        Tag::builder().set_level(level).finish()
+        Tag::build(|builder| builder.level(level))
     }
 }
 
