@@ -5,7 +5,7 @@
 //! that `tracing-forest` does, in fact, keep each one coherent.
 use rand::Rng;
 use tokio::time::{sleep, Duration};
-use tracing::{info, trace_span, Instrument};
+use tracing_forest::{traits::*, util::*};
 
 type Result<T> = core::result::Result<T, Box<dyn std::error::Error>>;
 

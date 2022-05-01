@@ -1,4 +1,4 @@
-use tracing_forest::{traits::*, util::*, ForestLayer, Printer, Tag};
+use tracing_forest::{traits::*, util::*, Printer, Tag};
 use tracing_subscriber::Registry;
 
 #[test]

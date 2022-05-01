@@ -3,7 +3,7 @@
 //!
 //! It is intended to maximize the amount of concurrent operations to demonstrate
 //! that `tracing-forest` does, in fact, keep each one coherent.
-use tracing::{info, info_span};
+use tracing_forest::util::*;
 
 type Result<T> = core::result::Result<T, Box<dyn std::error::Error>>;
 
