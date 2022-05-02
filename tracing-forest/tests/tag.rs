@@ -5,10 +5,12 @@ fn kanidm_tag(event: &Event) -> Option<Tag> {
     let level = *event.metadata().level();
 
     Some(match target {
-        "security" if level == Level::ERROR => {
-            Tag::build(|builder| builder.prefix(target).suffix("critical").icon('🔐'))
-        }
-        "admin" | "request" => Tag::build(|builder| builder.prefix(target).level(level)),
+        "security" if level == Level::ERROR => Tag::builder()
+            .prefix(target)
+            .suffix("critical")
+            .icon('🔐')
+            .build(),
+        "admin" | "request" => Tag::builder().prefix(target).level(level).build(),
         _ => return None,
     })
 }

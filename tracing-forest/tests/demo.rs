@@ -20,13 +20,17 @@ fn pretty_tag(event: &Event) -> Option<Tag> {
     let target = event.metadata().target();
 
     Some(match target {
-        "security" if level == Level::ERROR => {
-            Tag::build(|builder| builder.icon('🔐').prefix(target).suffix("critical"))
-        }
-        "security" if level == Level::INFO => {
-            Tag::build(|builder| builder.icon('🔓').prefix(target).suffix("access"))
-        }
-        "admin" | "request" | "filter" => Tag::build(|builder| builder.prefix(target).level(level)),
+        "security" if level == Level::ERROR => Tag::builder()
+            .icon('🔐')
+            .prefix(target)
+            .suffix("critical")
+            .build(),
+        "security" if level == Level::INFO => Tag::builder()
+            .icon('🔓')
+            .prefix(target)
+            .suffix("access")
+            .build(),
+        "admin" | "request" | "filter" => Tag::builder().prefix(target).level(level).build(),
         _ => return None,
     })
 }

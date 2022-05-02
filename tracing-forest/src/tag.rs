@@ -39,10 +39,12 @@
 //!     let level = *event.metadata().level();
 //!
 //!     Some(match target {
-//!         "security" if level == Level::ERROR => {
-//!             Tag::build(|builder| builder.prefix(target).suffix("critical").icon('🔐'))
-//!         }
-//!         "admin" | "request" => Tag::build(|builder| builder.prefix(target).level(level)),
+//!         "security" if level == Level::ERROR => Tag::builder()
+//!             .prefix(target)
+//!             .suffix("critical")
+//!             .icon('🔐')
+//!             .build(),
+//!         "admin" | "request" => Tag::builder().prefix(target).level(level).build(),
 //!         _ => return None,
 //!     })
 //! }
@@ -99,19 +101,17 @@ impl Tag {
     /// ```
     /// use tracing_forest::Tag;
     ///
-    /// let tag = Tag::build(|builder| builder.prefix("security").suffix("critical").icon('🔐'));
+    /// let tag = Tag::builder()
+    ///     .prefix("security")
+    ///     .suffix("critical")
+    ///     .icon('🔐')
+    ///     .build();
     /// ```
-    pub fn build(f: impl FnOnce(Builder<Empty, Empty>) -> Builder<Suffix, Icon>) -> Self {
-        let builder = f(Builder {
+    pub fn builder() -> Builder<(), ()> {
+        Builder {
             prefix: None,
-            suffix: Empty(()),
-            icon: Empty(()),
-        });
-
-        Tag {
-            prefix: builder.prefix,
-            suffix: builder.suffix.0,
-            icon: builder.icon.0,
+            suffix: (),
+            icon: (),
         }
     }
 
@@ -133,20 +133,20 @@ impl Tag {
 
 /// Incrementally construct [`Tag`]s.
 ///
-/// See [`Tag::build`] for more details.
+/// See [`Tag::builder`] for more details.
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Builder<S, I> {
     prefix: Option<&'static str>,
     suffix: S,
     icon: I,
 }
 
-/// A type used by [`Builder`] to indicate that a field hasn't been set.
-pub struct Empty(());
-
 /// A type used by [`Builder`] to indicate that the suffix has been set.
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Suffix(&'static str);
 
 /// A type used by [`Builder`] to indicate that the icon has been set.
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Icon(char);
 
 impl<S, I> Builder<S, I> {
@@ -197,6 +197,21 @@ impl<S, I> Builder<S, I> {
     }
 }
 
+impl Builder<Suffix, Icon> {
+    /// Complete the [`Tag`].
+    ///
+    /// This can only be called once a suffix and an icon have been provided via
+    /// [`.suffix(...)`](Builder::suffix) and [`.icon(...)`](Builder::icon), or
+    /// alternatively just [`.level(...)`](Builder::level).
+    pub fn build(self) -> Tag {
+        Tag {
+            prefix: self.prefix,
+            suffix: self.suffix.0,
+            icon: self.icon.0,
+        }
+    }
+}
+
 impl fmt::Display for Tag {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(prefix) = self.prefix {
@@ -209,7 +224,7 @@ impl fmt::Display for Tag {
 
 impl From<Level> for Tag {
     fn from(level: Level) -> Self {
-        Tag::build(|builder| builder.level(level))
+        Tag::builder().level(level).build()
     }
 }
 
