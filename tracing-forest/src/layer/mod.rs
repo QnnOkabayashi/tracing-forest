@@ -1,5 +1,5 @@
 use crate::fail;
-use crate::printer::{PrettyPrinter, Printer};
+use crate::printer::PrettyPrinter;
 use crate::processor::{Processor, Sink};
 use crate::tag::{NoTag, Tag, TagParser};
 use crate::tree::{self, FieldSet, Tree};
@@ -35,13 +35,13 @@ impl OpenedSpan {
 
             attrs.record(&mut |field: &Field, value: &dyn fmt::Debug| {
                 if field.name() == "uuid" && maybe_uuid.is_none() {
-                    const SIZE: usize = 64;
-                    let mut buf = [0u8; SIZE];
+                    const LENGTH: usize = 45;
+                    let mut buf = [0u8; LENGTH];
                     let mut remaining = &mut buf[..];
 
                     if let Ok(()) = write!(remaining, "{:?}", value) {
-                        let len = SIZE - remaining.len();
-                        if let Ok(parsed) = id::try_parse(&buf[..len]) {
+                        let len = LENGTH - remaining.len();
+                        if let Some(parsed) = id::try_parse(&buf[..len]) {
                             maybe_uuid = Some(parsed);
                         }
                     }
@@ -56,7 +56,7 @@ impl OpenedSpan {
                     Some(parent) => parent
                         .extensions()
                         .get::<OpenedSpan>()
-                        .unwrap_or_else(fail::opened_span_not_in_exts)
+                        .expect(fail::OPENED_SPAN_NOT_IN_EXTENSIONS)
                         .span
                         .uuid(),
                     None => Uuid::new_v4(),
@@ -100,12 +100,12 @@ impl OpenedSpan {
             event
         };
 
-        self.span.children.push(Tree::Event(event));
+        self.span.nodes.push(Tree::Event(event));
     }
 
     fn record_span(&mut self, span: tree::Span) {
         self.span.inner_duration += span.total_duration();
-        self.span.children.push(Tree::Span(span));
+        self.span.nodes.push(Tree::Span(span));
     }
 
     #[cfg(feature = "uuid")]
@@ -145,7 +145,7 @@ impl ForestLayer<Sink, NoTag> {
 impl Default for ForestLayer<PrettyPrinter, NoTag> {
     fn default() -> Self {
         ForestLayer {
-            processor: Printer::default(),
+            processor: PrettyPrinter::new(),
             tag: NoTag,
         }
     }
@@ -158,7 +158,7 @@ where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
     fn on_new_span(&self, attrs: &Attributes, id: &Id, ctx: Context<S>) {
-        let span = ctx.span(id).unwrap_or_else(fail::span_not_in_ctx);
+        let span = ctx.span(id).expect(fail::SPAN_NOT_IN_CONTEXT);
         let opened = OpenedSpan::new(attrs, &ctx);
 
         let mut extensions = span.extensions_mut();
@@ -197,69 +197,65 @@ where
 
         event.record(&mut visitor);
 
-        let level = *event.metadata().level();
-        let tag = self
-            .tag
-            .try_parse(event)
-            .unwrap_or_else(|| Tag::from(level));
+        let shared = tree::Shared {
+            #[cfg(feature = "uuid")]
+            uuid: Uuid::nil(),
+            #[cfg(feature = "chrono")]
+            timestamp: Utc::now(),
+            level: *event.metadata().level(),
+        };
 
-        let current_span = ctx.event_span(event);
-
-        let event = tree::Event {
-            shared: tree::Shared {
-                #[cfg(feature = "uuid")]
-                uuid: Uuid::nil(),
-                #[cfg(feature = "chrono")]
-                timestamp: Utc::now(),
-                level,
-            },
+        let tree_event = tree::Event {
+            shared,
             message: visitor.message,
-            tag,
+            tag: self.tag.parse(event),
             fields: visitor.fields,
         };
 
+        let current_span = ctx.event_span(event);
+
         if visitor.immediate {
-            write_immediate(&event, current_span.as_ref()).expect("writing urgent failed");
+            write_immediate(&tree_event, current_span.as_ref()).expect("writing urgent failed");
         }
 
         match current_span.as_ref() {
             Some(parent) => parent
                 .extensions_mut()
                 .get_mut::<OpenedSpan>()
-                .unwrap_or_else(fail::opened_span_not_in_exts)
-                .record_event(event),
+                .expect(fail::OPENED_SPAN_NOT_IN_EXTENSIONS)
+                .record_event(tree_event),
             None => self
                 .processor
-                .process(Tree::Event(event))
-                .unwrap_or_else(fail::processing_error),
+                .process(Tree::Event(tree_event))
+                .expect(fail::PROCESSING_ERROR),
         }
     }
 
     fn on_enter(&self, id: &Id, ctx: Context<S>) {
         ctx.span(id)
-            .unwrap_or_else(fail::span_not_in_ctx)
+            .expect(fail::SPAN_NOT_IN_CONTEXT)
             .extensions_mut()
             .get_mut::<OpenedSpan>()
-            .unwrap_or_else(fail::opened_span_not_in_exts)
+            .expect(fail::OPENED_SPAN_NOT_IN_EXTENSIONS)
             .enter();
     }
 
     fn on_exit(&self, id: &Id, ctx: Context<S>) {
         ctx.span(id)
-            .unwrap_or_else(fail::span_not_in_ctx)
+            .expect(fail::SPAN_NOT_IN_CONTEXT)
             .extensions_mut()
             .get_mut::<OpenedSpan>()
-            .unwrap_or_else(fail::opened_span_not_in_exts)
+            .expect(fail::OPENED_SPAN_NOT_IN_EXTENSIONS)
             .exit();
     }
 
     fn on_close(&self, id: Id, ctx: Context<S>) {
-        let span_ref = ctx.span(&id).unwrap_or_else(fail::span_not_in_ctx);
+        let span_ref = ctx.span(&id).expect(fail::SPAN_NOT_IN_CONTEXT);
 
         let mut span = span_ref
             .extensions_mut()
             .remove::<OpenedSpan>()
-            .unwrap_or_else(fail::opened_span_not_in_exts)
+            .expect(fail::OPENED_SPAN_NOT_IN_EXTENSIONS)
             .close();
 
         // Ensure that the total duration is at least as much as the inner
@@ -277,12 +273,12 @@ where
             Some(parent) => parent
                 .extensions_mut()
                 .get_mut::<OpenedSpan>()
-                .unwrap_or_else(fail::opened_span_not_in_exts)
+                .expect(fail::OPENED_SPAN_NOT_IN_EXTENSIONS)
                 .record_span(span),
             None => self
                 .processor
                 .process(Tree::Span(span))
-                .unwrap_or_else(fail::processing_error),
+                .expect(fail::PROCESSING_ERROR),
         }
     }
 }
@@ -302,7 +298,7 @@ where
         let uuid = span
             .extensions()
             .get::<OpenedSpan>()
-            .unwrap_or_else(fail::opened_span_not_in_exts)
+            .expect(fail::OPENED_SPAN_NOT_IN_EXTENSIONS)
             .span
             .uuid();
         write!(writer, "{} ", uuid)?;
@@ -313,7 +309,7 @@ where
 
     write!(writer, "{:<8} ", event.level())?;
 
-    let tag = Tag::from(event.level());
+    let tag = event.tag().unwrap_or_else(|| Tag::from(event.level()));
 
     write!(writer, "{icon} IMMEDIATE {icon} ", icon = tag.icon())?;
 
@@ -345,7 +341,7 @@ where
 /// To use a worker task, consider using the [`worker_task`] function. Alternatively,
 /// configure a `Subscriber` manually using a `ForestLayer`.
 ///
-/// [`worker_task`]: crate::builder::worker_task
+/// [`worker_task`]: crate::runtime::worker_task
 ///
 /// # Examples
 /// ```

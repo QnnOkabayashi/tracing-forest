@@ -12,7 +12,7 @@ pub use pretty::Pretty;
 ///
 /// # Examples
 ///
-/// This trait implements all `Fn(&Tree) -> Result<String, E>` types, where `E: Debug`.
+/// This trait implements all `Fn(&Tree) -> Result<String, E>` types, where `E: Error + Send + Sync`.
 /// If the `serde` feature is enabled, functions like `serde_json::to_string_pretty`
 /// can be used wherever a `Formatter` is required.
 /// ```
@@ -108,8 +108,8 @@ impl<'a> MakeWriter<'a> for MakeStderr {
 /// A [`Processor`] that pretty-prints to stdout.
 pub type PrettyPrinter = Printer<Pretty, MakeStdout>;
 
-impl Printer<Pretty, MakeStdout> {
-    /// Returns a new [`Printer`] that pretty-prints to stdout.
+impl PrettyPrinter {
+    /// Returns a new [`PrettyPrinter`] that pretty-prints to stdout.
     ///
     /// Use [`Printer::formatter`] and [`Printer::writer`] for custom configuration.
     pub const fn new() -> Self {
@@ -150,9 +150,9 @@ where
     }
 }
 
-impl Default for Printer<Pretty, MakeStdout> {
+impl Default for PrettyPrinter {
     fn default() -> Self {
-        Printer::new()
+        PrettyPrinter::new()
     }
 }
 
@@ -164,12 +164,12 @@ where
     fn process(&self, tree: Tree) -> processor::Result {
         let string = match self.formatter.fmt(&tree) {
             Ok(s) => s,
-            Err(e) => return Err((tree, e.into())),
+            Err(e) => return Err(processor::error(tree, e.into())),
         };
 
         match self.make_writer.make_writer().write_all(string.as_bytes()) {
             Ok(()) => Ok(()),
-            Err(e) => Err((tree, e.into())),
+            Err(e) => Err(processor::error(tree, e.into())),
         }
     }
 }

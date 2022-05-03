@@ -5,7 +5,7 @@
 //! that `tracing-forest` does, in fact, keep each one coherent.
 use rand::Rng;
 use tokio::time::{sleep, Duration};
-use tracing::{info, trace_span, Instrument};
+use tracing_forest::{traits::*, util::*};
 
 type Result<T> = core::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -63,9 +63,9 @@ async fn test_n_tasks_random_sleeps() -> Result<()> {
     for tree in logs {
         let connection = tree.span()?;
         assert!(connection.name() == "connection");
-        assert!(connection.children().len() == 3);
+        assert!(connection.nodes().len() == 3);
 
-        let client_connect = connection.children()[0].event()?;
+        let client_connect = connection.nodes()[0].event()?;
         assert!(client_connect.message() == Some("new connection"));
         assert!(client_connect.fields().len() == 1);
 
@@ -73,15 +73,12 @@ async fn test_n_tasks_random_sleeps() -> Result<()> {
         assert!(field.key() == "client");
         let client_id = field.value();
 
-        for (child, action) in connection.children()[1..]
-            .iter()
-            .zip(["request", "response"])
-        {
+        for (child, action) in connection.nodes()[1..].iter().zip(["request", "response"]) {
             let span = child.span()?;
             assert!(span.name() == action);
-            assert!(span.children().len() == 2);
+            assert!(span.nodes().len() == 2);
 
-            for child in span.children() {
+            for child in span.nodes() {
                 let event = child.event()?;
                 assert!(event.fields().len() == 1);
 

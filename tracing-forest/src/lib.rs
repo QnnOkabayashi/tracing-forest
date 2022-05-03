@@ -47,29 +47,24 @@
 //! ```
 //! This crate also provides tools for much more advanced configurations:
 //! ```
-//! use tracing_forest::{Processor, ForestLayer};
-//! use tracing_subscriber::{Registry, layer::SubscriberExt};
-//! use tracing_subscriber::filter::{EnvFilter, LevelFilter};
+//! use tracing_forest::{traits::*, util::*};
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     // Send logs to a worker task
 //!     tracing_forest::worker_task()
 //!         .set_global(true)
 //!         .map_sender(|sender| sender.or_stderr())
-//!         .build_with(|layer: ForestLayer<_, _>| {
-//!             Registry::default()
-//!                 .with(layer)
-//!                 .with(EnvFilter::from_default_env())
-//!                 .with(LevelFilter::INFO)
-//!         })
+//!         .build_on(|subscriber| subscriber
+//!             .with(EnvFilter::from_default_env())
+//!             .with(LevelFilter::INFO)
+//!         )
 //!         .on(async {
-//!             // Code run within the subscriber
+//!             // -- snip --
 //!         })
 //!         .await;
 //! }
 //! ```
-//! For useful configuration abstractions, see the [`builder` module documentation][builder].
+//! For useful configuration abstractions, see the [`runtime` module documentation][runtime].
 //!
 //! # Contextual coherence in action
 //!
@@ -173,7 +168,7 @@
 //!
 //! # Categorizing events with tags
 //!
-//! This crate allows attaching supplemental categorical information to events with tags.
+//! This crate allows attaching supplemental categorical information to events with [`Tag`]s.
 //!
 //! Without tags, it's difficult to distinguish where events are occurring in a system.
 //! ```log
@@ -226,12 +221,12 @@
 //! # Immediate logs
 //!
 //! Since `tracing-forest` stores trace data in memory until the root span finishes,
-//! it can be a long time until logs ever written. This can be an issue when some
-//! logs are too urgent to wait.
+//! it can be a long time until a log is written. This may not be acceptable in
+//! certain use cases.
 //!
 //! To resolve this, the `immediate` field can be used on an event to print the
-//! event and it's parent spans to stderr. The event will still appear in the
-//! trace tree written once the root span closes.
+//! event and its parent spans to stderr. Unlike `eprintln!`, the event will
+//! still appear in the trace tree written once the root span closes.
 //!
 //! ## Example
 //!
@@ -266,6 +261,8 @@
 //! * `serde`: Enables log trees to be serialized, which is [useful for formatting][serde_fmt].
 //! * `env-filter`: Re-exports [`EnvFilter`] from the [`util`] module.
 //!
+//! By default, only `smallvec` in enabled.
+//!
 //! [`Uuid`]: uuid::Uuid
 //! [serde_fmt]: crate::printer::Formatter#examples
 //! [`EnvFilter`]: tracing_subscriber::EnvFilter
@@ -279,33 +276,30 @@
     // Fail the docs build if any intra-docs links are broken
     deny(rustdoc::broken_intra_doc_links),
 )]
+#![warn(missing_docs)]
 pub mod printer;
 pub mod processor;
-pub mod tree;
-#[macro_use]
 pub mod tag;
+pub mod tree;
 #[macro_use]
 mod cfg;
 mod fail;
 mod layer;
 
 pub use layer::{init, ForestLayer};
-pub use printer::{Formatter, Printer};
+pub use printer::{Formatter, PrettyPrinter, Printer};
 pub use processor::Processor;
 pub use tag::Tag;
 
 cfg_tokio! {
-    pub mod builder;
-    pub use builder::{capture, worker_task};
+    pub mod runtime;
+    pub use runtime::{capture, worker_task};
 }
 
 cfg_uuid! {
     pub use layer::id::id;
 }
 
-mod sealed {
-    pub trait Sealed {}
-}
 /// Bring traits from this crate, `tracing`, and `tracing_subscriber` into scope
 /// anonymously.
 pub mod traits {
@@ -323,6 +317,7 @@ pub mod util {
     #[doc(no_inline)]
     pub use tracing::{
         debug, debug_span, error, error_span, info, info_span, trace, trace_span, warn, warn_span,
+        Event, Level,
     };
     #[cfg(feature = "env-filter")]
     #[doc(no_inline)]

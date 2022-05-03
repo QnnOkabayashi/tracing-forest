@@ -1,16 +1,14 @@
 //! Tests for retrieving the id when there is none.
 
 use std::panic;
-use tracing::{
-    debug_span, dispatcher::DefaultGuard, error_span, info_span, trace_span, warn_span, Instrument,
-};
-use tracing_forest::ForestLayer;
-use tracing_subscriber::{prelude::*, registry};
+use tracing::dispatcher::DefaultGuard;
+use tracing_forest::{traits::*, util::*};
+use tracing_subscriber::Registry;
 use uuid::Uuid;
 
 fn init() -> DefaultGuard {
     let layer = ForestLayer::sink();
-    let subscriber = registry().with(layer);
+    let subscriber = Registry::default().with(layer);
     tracing::subscriber::set_default(subscriber)
 }
 

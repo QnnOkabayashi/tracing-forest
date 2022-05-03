@@ -1,25 +1,24 @@
-//! This module defines the core tree structure of `tracing-forest`, and provides
-//! methods used for log inspection when using [`capture`]. It consists of three
-//! types: [`Tree`], [`Span`], and [`Event`].
+//! The core tree structure of `tracing-forest`.
 //!
-//! [`capture`]: crate::builder::capture
+//! This module provides methods used for log inspection when using [`capture`].
+//! It consists of three types: [`Tree`], [`Span`], and [`Event`].
+//!
+//! [`capture`]: crate::runtime::capture
 use crate::tag::Tag;
-use crate::{cfg_chrono, cfg_uuid};
 #[cfg(feature = "chrono")]
 use chrono::{DateTime, Utc};
 #[cfg(feature = "serde")]
 use serde::Serialize;
 use std::time::Duration;
+use thiserror::Error;
 use tracing::Level;
 #[cfg(feature = "uuid")]
 use uuid::Uuid;
+
+mod field;
 #[cfg(feature = "serde")]
 mod ser;
 
-mod error;
-pub(crate) use error::{ExpectedEventError, ExpectedSpanError};
-
-mod field;
 pub use field::Field;
 pub(crate) use field::FieldSet;
 
@@ -27,14 +26,18 @@ pub(crate) use field::FieldSet;
 ///
 /// The inner types can be extracted through a `match` statement. Alternatively,
 /// the [`event`] and [`span`] methods provide a more ergonomic way to access the
-/// inner types.
+/// inner types in unit tests when combined with the [`capture`] function.
 ///
 /// [`event`]: Tree::event
 /// [`span`]: Tree::span
+/// [`capture`]: crate::runtime::capture
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum Tree {
+    /// An [`Event`] leaf node.
     Event(Event),
+
+    /// A [`Span`] inner node.
     Span(Span),
 }
 
@@ -50,7 +53,7 @@ pub struct Event {
     pub(crate) message: Option<String>,
 
     /// The tag that the event was collected with.
-    pub(crate) tag: Tag,
+    pub(crate) tag: Option<Tag>,
 
     /// Key-value data.
     #[cfg_attr(feature = "serde", serde(serialize_with = "ser::fields"))]
@@ -83,7 +86,7 @@ pub struct Span {
     pub(crate) inner_duration: Duration,
 
     /// Events and spans collected while the span was open.
-    pub(crate) children: Vec<Tree>,
+    pub(crate) nodes: Vec<Tree>,
 }
 
 #[derive(Clone, Debug)]
@@ -102,6 +105,20 @@ pub(crate) struct Shared {
     #[cfg_attr(feature = "serde", serde(serialize_with = "ser::level"))]
     pub(crate) level: Level,
 }
+
+/// Error returned by [`Tree::event`][event].
+///
+/// [event]: crate::tree::Tree::event
+#[derive(Error, Debug)]
+#[error("Expected an event, found a span")]
+pub struct ExpectedEventError(());
+
+/// Error returned by [`Tree::span`][span].
+///
+/// [span]: crate::tree::Tree::span
+#[derive(Error, Debug)]
+#[error("Expected a span, found an event")]
+pub struct ExpectedSpanError(());
 
 impl Tree {
     /// Returns a reference to the inner [`Event`] if the tree is an event.
@@ -135,11 +152,11 @@ impl Tree {
     /// }
     /// ```
     ///
-    /// [`capture`]: crate::builder::capture
+    /// [`capture`]: crate::runtime::capture
     pub fn event(&self) -> Result<&Event, ExpectedEventError> {
         match self {
             Tree::Event(event) => Ok(event),
-            Tree::Span(_) => Err(ExpectedEventError),
+            Tree::Span(_) => Err(ExpectedEventError(())),
         }
     }
 
@@ -175,28 +192,26 @@ impl Tree {
     /// }
     /// ```
     ///
-    /// [`capture`]: crate::builder::capture
+    /// [`capture`]: crate::runtime::capture
     pub fn span(&self) -> Result<&Span, ExpectedSpanError> {
         match self {
-            Tree::Event(_) => Err(ExpectedSpanError),
+            Tree::Event(_) => Err(ExpectedSpanError(())),
             Tree::Span(span) => Ok(span),
         }
     }
 }
 
 impl Event {
-    cfg_uuid! {
-        /// Returns the event's [`Uuid`].
-        pub fn uuid(&self) -> Uuid {
-            self.shared.uuid
-        }
+    /// Returns the event's [`Uuid`].
+    #[cfg(feature = "uuid")]
+    pub fn uuid(&self) -> Uuid {
+        self.shared.uuid
     }
 
-    cfg_chrono! {
-        /// Returns the [`DateTime`] that the event occurred at.
-        pub fn timestamp(&self) -> DateTime<Utc> {
-            self.shared.timestamp
-        }
+    /// Returns the [`DateTime`] that the event occurred at.
+    #[cfg(feature = "chrono")]
+    pub fn timestamp(&self) -> DateTime<Utc> {
+        self.shared.timestamp
     }
 
     /// Returns the event's [`Level`].
@@ -204,17 +219,14 @@ impl Event {
         self.shared.level
     }
 
-    /// Returns the event's message.
+    /// Returns the event's message, if there is one.
     pub fn message(&self) -> Option<&str> {
         self.message.as_deref()
     }
 
-    /// Returns the event's [`Tag`].
-    ///
-    /// If no tag was provided during construction, the event will hold a default
-    /// tag associated with its level.
-    pub fn tag(&self) -> &Tag {
-        &self.tag
+    /// Returns the event's [`Tag`], if there is one.
+    pub fn tag(&self) -> Option<Tag> {
+        self.tag
     }
 
     /// Returns the event's fields.
@@ -230,22 +242,20 @@ impl Span {
             name,
             total_duration: Duration::ZERO,
             inner_duration: Duration::ZERO,
-            children: Vec::new(),
+            nodes: Vec::new(),
         }
     }
 
-    cfg_uuid! {
-        /// Returns the span's [`Uuid`].
-        pub fn uuid(&self) -> Uuid {
-            self.shared.uuid
-        }
+    /// Returns the span's [`Uuid`].
+    #[cfg(feature = "uuid")]
+    pub fn uuid(&self) -> Uuid {
+        self.shared.uuid
     }
 
-    cfg_chrono! {
-        /// Returns the [`DateTime`] that the span occurred at.
-        pub fn timestamp(&self) -> DateTime<Utc> {
-            self.shared.timestamp
-        }
+    /// Returns the [`DateTime`] that the span occurred at.
+    #[cfg(feature = "chrono")]
+    pub fn timestamp(&self) -> DateTime<Utc> {
+        self.shared.timestamp
     }
 
     /// Returns the span's [`Level`].
@@ -259,8 +269,8 @@ impl Span {
     }
 
     /// Returns the span's child trees.
-    pub fn children(&self) -> &[Tree] {
-        &self.children
+    pub fn nodes(&self) -> &[Tree] {
+        &self.nodes
     }
 
     /// Returns the total duration the span was entered for.

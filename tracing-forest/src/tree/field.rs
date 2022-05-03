@@ -4,7 +4,7 @@ pub(crate) type FieldSet = smallvec::SmallVec<[Field; 3]>;
 pub(crate) type FieldSet = Vec<Field>;
 
 /// A key-value pair recorded from trace data.
-#[derive(Clone, Debug, Hash)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Field {
     key: &'static str,
     value: String,
