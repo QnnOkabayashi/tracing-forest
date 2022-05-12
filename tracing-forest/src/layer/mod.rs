@@ -25,7 +25,7 @@ pub(crate) struct OpenedSpan {
 }
 
 impl OpenedSpan {
-    fn new<S>(attrs: &Attributes, ctx: &Context<S>) -> Self
+    fn new<S>(attrs: &Attributes, _ctx: &Context<S>) -> Self
     where
         S: Subscriber + for<'a> LookupSpan<'a>,
     {
@@ -52,7 +52,7 @@ impl OpenedSpan {
 
             match maybe_uuid {
                 Some(uuid) => uuid,
-                None => match ctx.lookup_current() {
+                None => match _ctx.lookup_current() {
                     Some(parent) => parent
                         .extensions()
                         .get::<OpenedSpan>()
