@@ -1,3 +1,4 @@
+#![cfg(feature = "tokio")]
 use tracing_forest::{util::*, Tag};
 
 fn kanidm_tag(event: &Event) -> Option<Tag> {

@@ -1,5 +1,5 @@
 //! Tests for retrieving the id when there is none.
-
+#![cfg(feature = "tokio")]
 use std::panic;
 use tracing::dispatcher::DefaultGuard;
 use tracing_forest::{traits::*, util::*};

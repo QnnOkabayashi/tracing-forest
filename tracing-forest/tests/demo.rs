@@ -1,3 +1,4 @@
+#![cfg(feature = "serde")]
 use tracing_forest::{traits::*, util::*, Printer, Tag};
 use tracing_subscriber::Registry;
 

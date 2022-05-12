@@ -4,6 +4,7 @@
 //! `Runtime::on` finishes.
 //!
 //! Addresses https://github.com/QnnOkabayashi/tracing-forest/issues/4
+#![cfg(feature = "tokio")]
 use tokio::time::{timeout, Duration};
 
 #[tokio::test(flavor = "multi_thread")]

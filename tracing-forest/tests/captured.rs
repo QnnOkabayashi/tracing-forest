@@ -1,3 +1,4 @@
+#![cfg(feature = "tokio")]
 use std::error::Error;
 use tokio::time::Duration;
 use tracing_forest::{traits::*, util::*};

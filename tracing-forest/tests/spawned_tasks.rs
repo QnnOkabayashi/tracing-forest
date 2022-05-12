@@ -2,6 +2,7 @@
 //! that everything is still captured by the subscriber.
 //!
 //! Addresses https://github.com/QnnOkabayashi/tracing-forest/issues/3
+#![cfg(feature = "tokio")]
 use tokio::time::{sleep, Duration};
 use tracing::info;
 

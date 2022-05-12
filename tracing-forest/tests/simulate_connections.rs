@@ -3,6 +3,7 @@
 //!
 //! It is intended to maximize the amount of concurrent operations to demonstrate
 //! that `tracing-forest` does, in fact, keep each one coherent.
+#![cfg(feature = "tokio")]
 use rand::Rng;
 use tokio::time::{sleep, Duration};
 use tracing_forest::{traits::*, util::*};
