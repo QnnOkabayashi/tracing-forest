@@ -2,7 +2,7 @@ use crate::printer::Formatter;
 use crate::tree::{Event, Shared, Span, Tree};
 use crate::Tag;
 use ansi_term::Color;
-use std::fmt::{self, Write};
+use std::fmt::{self, Debug, Write};
 use tracing::Level;
 
 #[cfg(feature = "smallvec")]
@@ -99,7 +99,7 @@ impl Pretty {
         write!(writer, "{:<36} ", shared.timestamp.to_rfc3339())?;
 
         #[cfg(feature = "ansi")]
-        return write!(writer, "{} ", ColorLevel(shared.level));
+        return write!(writer, "{:<8} ", ColorLevel(shared.level));
 
         #[cfg(not(feature = "ansi"))]
         return write!(writer, "{:<8} ", shared.level);
@@ -225,13 +225,16 @@ struct ColorLevel(Level);
 
 impl fmt::Display for ColorLevel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.0 {
-            Level::TRACE => Color::Purple.bold().paint("TRACE   "),
-            Level::DEBUG => Color::Blue.bold().paint("DEBUG   "),
-            Level::INFO => Color::Green.bold().paint("INFO    "),
-            Level::WARN => Color::RGB(252, 234, 160).bold().paint("WARN    "), // orange
-            Level::ERROR => Color::Red.bold().paint("ERROR   "),
-        }
-        .fmt(f)
+        let (color, text) = match self.0 {
+            Level::TRACE => (Color::Purple, "TRACE"),
+            Level::DEBUG => (Color::Blue, "DEBUG"),
+            Level::INFO => (Color::Green, "INFO"),
+            Level::WARN => (Color::RGB(252, 234, 160), "WARN"), // orange
+            Level::ERROR => (Color::Red, "ERROR"),
+        };
+        let style = color.bold();
+        write!(f, "{}", style.prefix())?;
+        f.pad(text)?;
+        write!(f, "{}", style.suffix())
     }
 }
