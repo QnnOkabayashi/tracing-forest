@@ -225,16 +225,16 @@ struct ColorLevel(Level);
 
 impl fmt::Display for ColorLevel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let (color, text) = match self.0 {
-            Level::TRACE => (Color::Purple, "TRACE"),
-            Level::DEBUG => (Color::Blue, "DEBUG"),
-            Level::INFO => (Color::Green, "INFO"),
-            Level::WARN => (Color::RGB(252, 234, 160), "WARN"), // orange
-            Level::ERROR => (Color::Red, "ERROR"),
+        let color = match self.0 {
+            Level::TRACE => Color::Purple,
+            Level::DEBUG => Color::Blue,
+            Level::INFO => Color::Green,
+            Level::WARN => Color::RGB(252, 234, 160), // orange
+            Level::ERROR => Color::Red,
         };
         let style = color.bold();
         write!(f, "{}", style.prefix())?;
-        f.pad(text)?;
+        f.pad(self.0.as_str())?;
         write!(f, "{}", style.suffix())
     }
 }
