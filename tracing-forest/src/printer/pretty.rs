@@ -2,7 +2,7 @@ use crate::printer::Formatter;
 use crate::tree::{Event, Shared, Span, Tree};
 use crate::Tag;
 use ansi_term::Color;
-use std::fmt::{self, Debug, Write};
+use std::fmt::{self, Write};
 use tracing::Level;
 
 #[cfg(feature = "smallvec")]
