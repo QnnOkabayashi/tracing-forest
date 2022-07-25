@@ -1,7 +1,9 @@
 use crate::printer::Formatter;
 use crate::tree::{Event, Shared, Span, Tree};
 use crate::Tag;
+use ansi_term::Color;
 use std::fmt::{self, Write};
+use tracing::Level;
 
 #[cfg(feature = "smallvec")]
 type IndentVec = smallvec::SmallVec<[Indent; 32]>;
@@ -94,9 +96,13 @@ impl Pretty {
         write!(writer, "{} ", shared.uuid)?;
 
         #[cfg(feature = "chrono")]
-        write!(writer, "{:<32} ", shared.timestamp.to_rfc3339())?;
+        write!(writer, "{:<36} ", shared.timestamp.to_rfc3339())?;
 
-        write!(writer, "{:<8} ", shared.level)
+        #[cfg(feature = "ansi")]
+        return write!(writer, "{:<8} ", ColorLevel(shared.level));
+
+        #[cfg(not(feature = "ansi"))]
+        return write!(writer, "{:<8} ", shared.level);
     }
 
     fn format_indent(indent: &[Indent], writer: &mut String) -> fmt::Result {
@@ -211,5 +217,24 @@ impl fmt::Display for DurationDisplay {
             t /= 1000.0;
         }
         write!(f, "{:.0}s", t * 1000.0)
+    }
+}
+
+// From tracing-tree
+struct ColorLevel(Level);
+
+impl fmt::Display for ColorLevel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let color = match self.0 {
+            Level::TRACE => Color::Purple,
+            Level::DEBUG => Color::Blue,
+            Level::INFO => Color::Green,
+            Level::WARN => Color::RGB(252, 234, 160), // orange
+            Level::ERROR => Color::Red,
+        };
+        let style = color.bold();
+        write!(f, "{}", style.prefix())?;
+        f.pad(self.0.as_str())?;
+        write!(f, "{}", style.suffix())
     }
 }

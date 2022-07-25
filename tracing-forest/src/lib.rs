@@ -256,6 +256,7 @@
 //! * `full`: Enables all features listed below.
 //! * `uuid`: Enables spans to carry operation IDs.
 //! * `chrono`: Enables timestamps on trace data.
+//! * `ansi`: Enables ANSI terminal colors.
 //! * `smallvec`: Enables some performance optimizations.
 //! * `tokio`: Enables [`worker_task`] and [`capture`].
 //! * `serde`: Enables log trees to be serialized, which is [useful for formatting][serde_fmt].
