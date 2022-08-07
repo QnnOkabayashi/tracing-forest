@@ -1,7 +1,6 @@
 use crate::printer::Formatter;
 use crate::tree::{Event, Shared, Span, Tree};
 use crate::Tag;
-use ansi_term::Color;
 use std::fmt::{self, Write};
 use tracing::Level;
 
@@ -9,6 +8,9 @@ use tracing::Level;
 type IndentVec = smallvec::SmallVec<[Indent; 32]>;
 #[cfg(not(feature = "smallvec"))]
 type IndentVec = Vec<Indent>;
+
+#[cfg(feature = "ansi")]
+use ansi_term::Color;
 
 /// Format logs for pretty printing.
 ///
@@ -221,8 +223,10 @@ impl fmt::Display for DurationDisplay {
 }
 
 // From tracing-tree
+#[cfg(feature = "ansi")]
 struct ColorLevel(Level);
 
+#[cfg(feature = "ansi")]
 impl fmt::Display for ColorLevel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let color = match self.0 {
