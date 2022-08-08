@@ -267,6 +267,7 @@
 //! [`Uuid`]: uuid::Uuid
 //! [serde_fmt]: crate::printer::Formatter#examples
 //! [`EnvFilter`]: tracing_subscriber::EnvFilter
+
 #![doc(issue_tracker_base_url = "https://github.com/QnnOkabayashi/tracing-forest/issues")]
 #![cfg_attr(
     docsrs,
@@ -277,7 +278,10 @@
     // Fail the docs build if any intra-docs links are broken
     deny(rustdoc::broken_intra_doc_links),
 )]
+#![deny(warnings)]
+#![warn(unused_extern_crates)]
 #![warn(missing_docs)]
+
 pub mod printer;
 pub mod processor;
 pub mod tag;
@@ -287,7 +291,7 @@ mod cfg;
 mod fail;
 mod layer;
 
-pub use layer::{init, ForestLayer};
+pub use layer::{init, test_init, ForestLayer};
 pub use printer::{Formatter, PrettyPrinter, Printer};
 pub use processor::Processor;
 pub use tag::Tag;
