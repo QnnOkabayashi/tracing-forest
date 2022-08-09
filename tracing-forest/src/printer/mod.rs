@@ -194,10 +194,7 @@ where
     F: 'static + Formatter,
 {
     fn process(&self, tree: Tree) -> processor::Result {
-        let string = match self.formatter.fmt(&tree) {
-            Ok(s) => s,
-            Err(e) => return Err(processor::error(tree, e.into())),
-        };
+        let string = self.formatter.fmt(&tree).map_err(|e| processor::error(tree, e.into()))?;
 
         print!("{}", string);
         Ok(())
