@@ -70,8 +70,8 @@ where
 
 /// A [`Processor`] that formats and writes logs.
 #[derive(Clone, Debug)]
-pub struct Printer<S, W> {
-    formatter: S,
+pub struct Printer<F, W> {
+    formatter: F,
     make_writer: W,
 }
 
@@ -171,5 +171,32 @@ where
             Ok(()) => Ok(()),
             Err(e) => Err(processor::error(tree, e.into())),
         }
+    }
+}
+
+/// A [`Processor`] that captures logs during tests and allows them to be presented
+/// when --nocapture is used.
+#[derive(Clone, Debug)]
+pub struct TestCapturePrinter<F> {
+    formatter: F,
+}
+
+impl TestCapturePrinter<Pretty> {
+    /// Construct a new test capturing printer with the default `Pretty` formatter. This printer
+    /// is intented for use in tests only as it works with the default rust stdout capture mechanism
+    pub const fn new() -> Self {
+        TestCapturePrinter { formatter: Pretty }
+    }
+}
+
+impl<F> Processor for TestCapturePrinter<F>
+where
+    F: 'static + Formatter,
+{
+    fn process(&self, tree: Tree) -> processor::Result {
+        let string = self.formatter.fmt(&tree).map_err(|e| processor::error(tree, e.into()))?;
+
+        print!("{}", string);
+        Ok(())
     }
 }

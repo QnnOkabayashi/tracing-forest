@@ -1,5 +1,5 @@
 use crate::fail;
-use crate::printer::PrettyPrinter;
+use crate::printer::{PrettyPrinter, TestCapturePrinter};
 use crate::processor::{Processor, Sink};
 use crate::tag::{NoTag, Tag, TagParser};
 use crate::tree::{self, FieldSet, Tree};
@@ -14,6 +14,7 @@ use tracing::{Event, Subscriber};
 use tracing_subscriber::layer::{Context, Layer, SubscriberExt};
 use tracing_subscriber::registry::{LookupSpan, Registry, SpanRef};
 use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::util::TryInitError;
 #[cfg(feature = "uuid")]
 use uuid::Uuid;
 #[cfg(feature = "uuid")]
@@ -362,4 +363,29 @@ where
 /// ```
 pub fn init() {
     Registry::default().with(ForestLayer::default()).init();
+}
+
+/// Initializes a global subscriber for cargo tests with a [`ForestLayer`] using the default
+/// configuration.
+///
+/// This function is intended for test case initialization and processes log trees "inline",
+/// meaning it doesn't take advantage of a worker task for formatting and writing.
+///
+/// [`worker_task`]: crate::runtime::worker_task
+///
+/// # Examples
+/// ```
+/// use tracing::{info, info_span};
+///
+/// let _ = tracing_forest::test_init();
+///
+/// info!("Hello, world!");
+/// info_span!("my_span").in_scope(|| {
+///     info!("Relevant information");
+/// });
+/// ```
+pub fn test_init() -> Result<(), TryInitError> {
+    Registry::default()
+        .with(ForestLayer::new(TestCapturePrinter::new(), NoTag))
+        .try_init()
 }
