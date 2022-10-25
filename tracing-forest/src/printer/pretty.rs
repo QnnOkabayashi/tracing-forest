@@ -9,9 +9,9 @@ type IndentVec = smallvec::SmallVec<[Indent; 32]>;
 type IndentVec = Vec<Indent>;
 
 #[cfg(feature = "ansi")]
-use tracing::Level;
-#[cfg(feature = "ansi")]
 use ansi_term::Color;
+#[cfg(feature = "ansi")]
+use tracing::Level;
 
 /// Format logs for pretty printing.
 ///
