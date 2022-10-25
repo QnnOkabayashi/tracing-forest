@@ -1,6 +1,6 @@
 [package]
 name = "tracing-forest"
-version = "0.1.4"
+version = "0.1.5"
 authors = ["Quinn Okabayashi"]
 edition = "2018"
 description = "Preserving contextual coherence among trace data from concurrent tasks"

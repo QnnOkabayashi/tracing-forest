@@ -35,7 +35,7 @@
 //! The easiest way to get started is to enable all features. Do this by
 //! adding the following to your `Cargo.toml` file:
 //! ```toml
-//! tracing-forest = { version = "0.1.4", features = ["full"] }
+//! tracing-forest = { version = "0.1.5", features = ["full"] }
 //! ```
 //! Then, add [`tracing_forest::init`](crate::init) to your main function:
 //! ```
