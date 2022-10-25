@@ -2,13 +2,14 @@ use crate::printer::Formatter;
 use crate::tree::{Event, Shared, Span, Tree};
 use crate::Tag;
 use std::fmt::{self, Write};
-use tracing::Level;
 
 #[cfg(feature = "smallvec")]
 type IndentVec = smallvec::SmallVec<[Indent; 32]>;
 #[cfg(not(feature = "smallvec"))]
 type IndentVec = Vec<Indent>;
 
+#[cfg(feature = "ansi")]
+use tracing::Level;
 #[cfg(feature = "ansi")]
 use ansi_term::Color;
 
