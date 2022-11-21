@@ -54,10 +54,6 @@ pub struct Event {
 
     /// The tag that the event was collected with.
     pub(crate) tag: Option<Tag>,
-
-    /// Key-value data.
-    #[cfg_attr(feature = "serde", serde(serialize_with = "ser::fields"))]
-    pub(crate) fields: FieldSet,
 }
 
 /// An internal node in the log tree carrying information about a Tracing span.
@@ -70,10 +66,6 @@ pub struct Span {
 
     /// The name of the span.
     pub(crate) name: &'static str,
-
-    /// Key-value data.
-    #[cfg_attr(feature = "serde", serde(serialize_with = "ser::fields"))]
-    pub(crate) fields: FieldSet,
 
     /// The total duration the span was open for.
     #[cfg_attr(
@@ -108,6 +100,10 @@ pub(crate) struct Shared {
     /// The level the event or span occurred at.
     #[cfg_attr(feature = "serde", serde(serialize_with = "ser::level"))]
     pub(crate) level: Level,
+
+    /// Key-value data.
+    #[cfg_attr(feature = "serde", serde(serialize_with = "ser::fields"))]
+    pub(crate) fields: FieldSet,
 }
 
 /// Error returned by [`Tree::event`][event].
@@ -235,16 +231,15 @@ impl Event {
 
     /// Returns the event's fields.
     pub fn fields(&self) -> &[Field] {
-        &self.fields
+        &self.shared.fields
     }
 }
 
 impl Span {
-    pub(crate) fn new(shared: Shared, name: &'static str, fields: FieldSet) -> Self {
+    pub(crate) fn new(shared: Shared, name: &'static str) -> Self {
         Span {
             shared,
             name,
-            fields,
             total_duration: Duration::ZERO,
             inner_duration: Duration::ZERO,
             nodes: Vec::new(),
