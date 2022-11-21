@@ -71,6 +71,10 @@ pub struct Span {
     /// The name of the span.
     pub(crate) name: &'static str,
 
+    /// Key-value data.
+    #[cfg_attr(feature = "serde", serde(serialize_with = "ser::fields"))]
+    pub(crate) fields: FieldSet,
+
     /// The total duration the span was open for.
     #[cfg_attr(
         feature = "serde",
@@ -236,10 +240,11 @@ impl Event {
 }
 
 impl Span {
-    pub(crate) fn new(shared: Shared, name: &'static str) -> Self {
+    pub(crate) fn new(shared: Shared, name: &'static str, fields: FieldSet) -> Self {
         Span {
             shared,
             name,
+            fields,
             total_duration: Duration::ZERO,
             inner_duration: Duration::ZERO,
             nodes: Vec::new(),

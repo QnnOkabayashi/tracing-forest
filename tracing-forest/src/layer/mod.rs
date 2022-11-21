@@ -73,7 +73,24 @@ impl OpenedSpan {
             level: *attrs.metadata().level(),
         };
 
-        let span = tree::Span::new(shared, attrs.metadata().name());
+        struct Visitor {
+            fields: FieldSet,
+        }
+
+        impl Visit for Visitor {
+            fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+                let value = format!("{:?}", value);
+                self.fields.push(tree::Field::new(field.name(), value));
+            }
+        }
+
+        let mut visitor = Visitor {
+            fields: FieldSet::default(),
+        };
+
+        attrs.record(&mut visitor);
+
+        let span = tree::Span::new(shared, attrs.metadata().name(), visitor.fields);
 
         OpenedSpan {
             span,
