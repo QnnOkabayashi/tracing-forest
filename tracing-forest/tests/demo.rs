@@ -10,7 +10,7 @@ fn test_manual_with_json() {
     let subscriber = Registry::default().with(layer);
     tracing::subscriber::with_default(subscriber, || {
         info!("hello, world!");
-        info_span!("my-span", answer=42).in_scope(|| {
+        info_span!("my-span", answer = 42).in_scope(|| {
             info!("wassup");
         })
     });
