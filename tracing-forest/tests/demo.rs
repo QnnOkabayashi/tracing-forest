@@ -10,7 +10,7 @@ fn test_manual_with_json() {
     let subscriber = Registry::default().with(layer);
     tracing::subscriber::with_default(subscriber, || {
         info!("hello, world!");
-        info_span!("my-span").in_scope(|| {
+        info_span!("my-span", answer=42).in_scope(|| {
             info!("wassup");
         })
     });
@@ -37,7 +37,6 @@ fn pretty_tag(event: &Event) -> Option<Tag> {
 }
 
 #[test]
-#[ignore]
 fn pretty_example() {
     let _guard = tracing::subscriber::set_default({
         let layer = ForestLayer::new(Printer::new(), pretty_tag);
@@ -50,7 +49,7 @@ fn pretty_example() {
             info!(target: "filter", "Some filter info...");
             info_span!("server::search").in_scope(|| {
                 info_span!("be::search").in_scope(|| {
-                    info_span!("be::search -> filter2idl").in_scope(|| {
+                    info_span!("be::search -> filter2idl", term="bobby", verbose=false).in_scope(|| {
                         info_span!("be::idl_arc_sqlite::get_idl").in_scope(|| {
                             info!(target: "filter", "Some filter info...");
                         });
