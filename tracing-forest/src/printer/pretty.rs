@@ -155,7 +155,18 @@ impl Pretty {
             write!(writer, "{:.2}% / ", percent_base_of_root_duration)?;
         }
 
-        writeln!(writer, "{:.2}% ]", percent_total_of_root_duration)?;
+        write!(writer, "{:.2}% ]", percent_total_of_root_duration)?;
+
+        for (n, field) in span.fields.iter().enumerate() {
+            write!(
+                writer,
+                "{} {}: {}",
+                if n == 0 { "" } else { " |" },
+                field.key(),
+                field.value()
+            )?;
+        }
+        writeln!(writer)?;
 
         if let Some((last, remaining)) = span.nodes().split_last() {
             match indent.last_mut() {
