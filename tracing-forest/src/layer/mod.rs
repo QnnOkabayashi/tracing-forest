@@ -6,7 +6,7 @@ use crate::tree::{self, FieldSet, Tree};
 #[cfg(feature = "chrono")]
 use chrono::Utc;
 use std::fmt;
-use std::io::{self, Write};
+use std::io::{self, Cursor, Write};
 use std::time::Instant;
 use tracing::field::{Field, Visit};
 use tracing::span::{Attributes, Id};
@@ -36,15 +36,11 @@ impl OpenedSpan {
 
             attrs.record(&mut |field: &Field, value: &dyn fmt::Debug| {
                 if field.name() == "uuid" && maybe_uuid.is_none() {
-                    const LENGTH: usize = 45;
-                    let mut buf = [0u8; LENGTH];
-                    let mut remaining = &mut buf[..];
-
-                    if let Ok(()) = write!(remaining, "{:?}", value) {
-                        let len = LENGTH - remaining.len();
-                        if let Some(parsed) = id::try_parse(&buf[..len]) {
-                            maybe_uuid = Some(parsed);
-                        }
+                    let mut buf = [0u8; 45];
+                    let mut buf = Cursor::new(&mut buf[..]);
+                    if let Ok(_) = write!(&mut buf, "{:?}", value) {
+                        let pos = buf.position() as usize;
+                        maybe_uuid = Uuid::try_parse_ascii(&buf.get_ref()[..pos]).ok();
                     }
                 }
 
