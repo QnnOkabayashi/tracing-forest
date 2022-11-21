@@ -30,70 +30,49 @@ impl OpenedSpan {
     where
         S: Subscriber + for<'a> LookupSpan<'a>,
     {
+        let mut fields = FieldSet::default();
         #[cfg(feature = "uuid")]
-        let uuid = {
-            let mut maybe_uuid = None;
+        let mut maybe_uuid = None;
 
-            attrs.record(&mut |field: &Field, value: &dyn fmt::Debug| {
-                if field.name() == "uuid" && maybe_uuid.is_none() {
-                    const LENGTH: usize = 45;
-                    let mut buf = [0u8; LENGTH];
-                    let mut remaining = &mut buf[..];
+        attrs.record(&mut |field: &Field, value: &dyn fmt::Debug| {
+            #[cfg(feature = "uuid")]
+            if field.name() == "uuid" && maybe_uuid.is_none() {
+                const LENGTH: usize = 45;
+                let mut buf = [0u8; LENGTH];
+                let mut remaining = &mut buf[..];
 
-                    if let Ok(()) = write!(remaining, "{:?}", value) {
-                        let len = LENGTH - remaining.len();
-                        if let Some(parsed) = id::try_parse(&buf[..len]) {
-                            maybe_uuid = Some(parsed);
-                        }
+                if let Ok(()) = write!(remaining, "{:?}", value) {
+                    let len = LENGTH - remaining.len();
+                    if let Some(parsed) = id::try_parse(&buf[..len]) {
+                        maybe_uuid = Some(parsed);
                     }
                 }
-
-                // record other field-values pairs here...
-            });
-
-            match maybe_uuid {
-                Some(uuid) => uuid,
-                None => match _ctx.lookup_current() {
-                    Some(parent) => parent
-                        .extensions()
-                        .get::<OpenedSpan>()
-                        .expect(fail::OPENED_SPAN_NOT_IN_EXTENSIONS)
-                        .span
-                        .uuid(),
-                    None => Uuid::new_v4(),
-                },
+                return;
             }
-        };
+
+            let value = format!("{:?}", value);
+            fields.push(tree::Field::new(field.name(), value));
+        });
 
         let shared = tree::Shared {
             #[cfg(feature = "chrono")]
             timestamp: Utc::now(),
-            #[cfg(feature = "uuid")]
-            uuid,
             level: *attrs.metadata().level(),
+            fields,
+            #[cfg(feature = "uuid")]
+            uuid: maybe_uuid.unwrap_or_else(|| match _ctx.lookup_current() {
+                Some(parent) => parent
+                    .extensions()
+                    .get::<OpenedSpan>()
+                    .expect(fail::OPENED_SPAN_NOT_IN_EXTENSIONS)
+                    .span
+                    .uuid(),
+                None => Uuid::new_v4(),
+            }),
         };
-
-        struct Visitor {
-            fields: FieldSet,
-        }
-
-        impl Visit for Visitor {
-            fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
-                let value = format!("{:?}", value);
-                self.fields.push(tree::Field::new(field.name(), value));
-            }
-        }
-
-        let mut visitor = Visitor {
-            fields: FieldSet::default(),
-        };
-
-        attrs.record(&mut visitor);
-
-        let span = tree::Span::new(shared, attrs.metadata().name(), visitor.fields);
 
         OpenedSpan {
-            span,
+            span: tree::Span::new(shared, attrs.metadata().name()),
             start: Instant::now(),
         }
     }
@@ -221,13 +200,13 @@ where
             #[cfg(feature = "chrono")]
             timestamp: Utc::now(),
             level: *event.metadata().level(),
+            fields: visitor.fields,
         };
 
         let tree_event = tree::Event {
             shared,
             message: visitor.message,
             tag: self.tag.parse(event),
-            fields: visitor.fields,
         };
 
         let current_span = ctx.event_span(event);

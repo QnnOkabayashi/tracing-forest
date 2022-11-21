@@ -157,7 +157,7 @@ impl Pretty {
 
         write!(writer, "{:.2}% ]", percent_total_of_root_duration)?;
 
-        for (n, field) in span.fields.iter().enumerate() {
+        for (n, field) in span.shared.fields.iter().enumerate() {
             write!(
                 writer,
                 "{} {}: {}",
