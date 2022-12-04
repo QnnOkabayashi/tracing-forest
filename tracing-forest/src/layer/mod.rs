@@ -345,7 +345,10 @@ where
 
         let tree_event = tree::Event {
             shared,
-            message: None,
+            message: Some(format!(
+                "Recorded fields on {}",
+                current_span.metadata().name()
+            )),
             tag: None,
         };
 
