@@ -291,7 +291,7 @@ mod cfg;
 mod fail;
 mod layer;
 
-pub use layer::{init, test_init, ForestLayer};
+pub use layer::{init, test_init, ForestLayer, SpanFieldEventLayer};
 pub use printer::{Formatter, PrettyPrinter, Printer};
 pub use processor::Processor;
 pub use tag::Tag;

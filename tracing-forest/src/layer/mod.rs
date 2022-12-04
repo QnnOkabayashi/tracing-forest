@@ -9,7 +9,7 @@ use std::fmt;
 use std::io::{self, Write};
 use std::time::Instant;
 use tracing::field::{Field, Visit};
-use tracing::span::{Attributes, Id};
+use tracing::span::{Attributes, Id, Record};
 use tracing::{Event, Subscriber};
 use tracing_subscriber::layer::{Context, Layer, SubscriberExt};
 use tracing_subscriber::registry::{LookupSpan, Registry, SpanRef};
@@ -277,6 +277,71 @@ where
                 .process(Tree::Span(span))
                 .expect(fail::PROCESSING_ERROR),
         }
+    }
+}
+
+/// A [`Layer`] that passes changes to span fields through as events.
+///
+/// Use this layer if you'd like notifications of when spans change their fields.
+///
+/// # Examples
+/// ```
+/// use tracing::{trace_span};
+/// use tracing_forest::{ForestLayer, SpanFieldEventLayer, traits::*};
+/// use tracing_subscriber::Registry;
+///
+/// Registry::default()
+///     .with(SpanFieldEventLayer::default())
+///     .with(ForestLayer::default())
+///     .init();
+///
+/// // -- snip --
+///
+/// let span = trace_span!("span_with_parameter", parameter = "See the trees");
+/// let _enter = span.enter();
+/// span.record("parameter", "for the forest");
+/// ```
+/// Produces the the output:
+/// ```log
+/// TRACE    ┕━ span_with_parameter [ 390µs | 2.66% ] parameter: "See the trees"
+/// TRACE       ┕━ 📍 [trace]:  | parameter: "for the forest"
+/// ```
+#[derive(Default)]
+pub struct SpanFieldEventLayer {}
+
+impl<S> Layer<S> for SpanFieldEventLayer
+where
+    S: Subscriber + for<'a> LookupSpan<'a>,
+{
+    fn on_record(&self, span: &Id, values: &Record<'_>, ctx: Context<'_, S>) {
+        let current_span = ctx.span(span).expect(fail::SPAN_NOT_IN_CONTEXT);
+        let mut fields = FieldSet::new();
+
+        values.record(&mut |field: &Field, value: &dyn fmt::Debug| {
+            let value = format!("{:?}", value);
+            fields.push(tree::Field::new(field.name(), value));
+        });
+
+        let shared = tree::Shared {
+            #[cfg(feature = "uuid")]
+            uuid: Uuid::nil(),
+            #[cfg(feature = "chrono")]
+            timestamp: Utc::now(),
+            level: *current_span.metadata().level(),
+            fields,
+        };
+
+        let tree_event = tree::Event {
+            shared,
+            message: None,
+            tag: None,
+        };
+
+        current_span
+            .extensions_mut()
+            .get_mut::<OpenedSpan>()
+            .expect(fail::OPENED_SPAN_NOT_IN_EXTENSIONS)
+            .record_event(tree_event);
     }
 }
 
