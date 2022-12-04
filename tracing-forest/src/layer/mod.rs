@@ -287,11 +287,11 @@ where
 /// # Examples
 /// ```
 /// use tracing::trace_span;
-/// use tracing_forest::{ForestLayer, SpanFieldEventLayer, traits::*};
+/// use tracing_forest::{ForestLayer, WatchSpanFields, traits::*};
 /// use tracing_subscriber::Registry;
 ///
 /// Registry::default()
-///     .with(SpanFieldEventLayer::default())
+///     .with(WatchSpanFields::default())
 ///     .with(ForestLayer::default())
 ///     .init();
 ///
@@ -307,9 +307,9 @@ where
 /// TRACE       ┕━ 📍 [trace]:  | parameter: "for the forest"
 /// ```
 #[derive(Default)]
-pub struct SpanFieldEventLayer {}
+pub struct WatchSpanFields {}
 
-impl<S> Layer<S> for SpanFieldEventLayer
+impl<S> Layer<S> for WatchSpanFields
 where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
