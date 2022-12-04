@@ -286,7 +286,7 @@ where
 ///
 /// # Examples
 /// ```
-/// use tracing::{trace_span};
+/// use tracing::trace_span;
 /// use tracing_forest::{ForestLayer, SpanFieldEventLayer, traits::*};
 /// use tracing_subscriber::Registry;
 ///
