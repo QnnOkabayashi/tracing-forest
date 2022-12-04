@@ -10,7 +10,7 @@ use std::io::{self, Write};
 use std::time::Instant;
 use tracing::field::{Field, Visit};
 use tracing::span::{Attributes, Id, Record};
-use tracing::{Event, Subscriber};
+use tracing::{Event, Level, Subscriber};
 use tracing_subscriber::layer::{Context, Layer, SubscriberExt};
 use tracing_subscriber::registry::{LookupSpan, Registry, SpanRef};
 use tracing_subscriber::util::SubscriberInitExt;
@@ -307,7 +307,19 @@ where
 /// TRACE       ┕━ 📍 [trace]:  | parameter: "for the forest"
 /// ```
 #[derive(Default)]
-pub struct WatchSpanFields {}
+pub struct WatchSpanFields {
+    level: Option<Level>,
+}
+
+impl WatchSpanFields {
+    /// Construct a new `WatchSpanFields` with the given level.
+    ///
+    /// If the level supplied is `None` (the default), then the level logged will be that of the
+    /// surrounding span.
+    pub fn new(level: Option<Level>) -> WatchSpanFields {
+        WatchSpanFields { level }
+    }
+}
 
 impl<S> Layer<S> for WatchSpanFields
 where
@@ -327,7 +339,7 @@ where
             uuid: Uuid::nil(),
             #[cfg(feature = "chrono")]
             timestamp: Utc::now(),
-            level: *current_span.metadata().level(),
+            level: self.level.unwrap_or(*current_span.metadata().level()),
             fields,
         };
 
