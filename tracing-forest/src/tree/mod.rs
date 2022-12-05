@@ -33,6 +33,7 @@ pub(crate) use field::FieldSet;
 /// [`capture`]: crate::runtime::capture
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
+#[allow(clippy::large_enum_variant)] // https://github.com/rust-lang/rust-clippy/issues/9798
 pub enum Tree {
     /// An [`Event`] leaf node.
     Event(Event),
