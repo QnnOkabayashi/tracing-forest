@@ -567,7 +567,7 @@ where
     P: Processor + Send,
 {
     /// Execute a future in the context of the configured subscriber.
-    pub async fn on(self, f: impl Future<Output = ()>) {
+    pub async fn on<F: Future>(self, f: F) -> F::Output {
         let (shutdown_tx, mut shutdown_rx) = oneshot::channel();
         let processor = self.worker_processor.0;
         let mut receiver = self.receiver;
@@ -589,6 +589,8 @@ where
             }
         });
 
+        let output: F::Output;
+
         {
             let _guard = if self.is_global {
                 tracing::subscriber::set_global_default(self.subscriber)
@@ -598,12 +600,14 @@ where
                 Some(tracing::subscriber::set_default(self.subscriber))
             };
 
-            f.await;
+            output = f.await;
         }
 
         shutdown_tx.send(()).expect("Shutdown signal couldn't send, this is a bug");
 
         handle.await.expect("Failed to join the writing task, this is a bug");
+
+        output
     }
 }
 
