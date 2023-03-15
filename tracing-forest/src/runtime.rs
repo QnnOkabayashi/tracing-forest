@@ -589,9 +589,7 @@ where
             }
         });
 
-        let output: F::Output;
-
-        {
+        let output = {
             let _guard = if self.is_global {
                 tracing::subscriber::set_global_default(self.subscriber)
                     .expect("global default already set");
@@ -600,8 +598,8 @@ where
                 Some(tracing::subscriber::set_default(self.subscriber))
             };
 
-            output = f.await;
-        }
+            f.await
+        };
 
         shutdown_tx.send(()).expect("Shutdown signal couldn't send, this is a bug");
 
