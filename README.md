@@ -123,15 +123,15 @@ async fn main() {
 ```
 Now we can easily trace what happened:
 ```log
-INFO     conn [ 150µs | 100.00% ]
+INFO     conn [ 150µs | 100.00% ] id: 1
 INFO     ┝━ ｉ [info]: step 0 | id: 1
 INFO     ┝━ ｉ [info]: step 1 | id: 1
 INFO     ┕━ ｉ [info]: step 2 | id: 1
-INFO     conn [ 343µs | 100.00% ]
+INFO     conn [ 343µs | 100.00% ] id: 0
 INFO     ┝━ ｉ [info]: step 0 | id: 0
 INFO     ┝━ ｉ [info]: step 1 | id: 0
 INFO     ┕━ ｉ [info]: step 2 | id: 0
-INFO     conn [ 233µs | 100.00% ]
+INFO     conn [ 233µs | 100.00% ] id: 2
 INFO     ┝━ ｉ [info]: step 0 | id: 2
 INFO     ┝━ ｉ [info]: step 1 | id: 2
 INFO     ┕━ ｉ [info]: step 2 | id: 2
