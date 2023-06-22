@@ -269,6 +269,11 @@ impl Span {
         self.name
     }
 
+    /// Returns the span's fields.
+    pub fn fields(&self) -> &[Field] {
+        &self.shared.fields
+    }
+
     /// Returns the span's child trees.
     pub fn nodes(&self) -> &[Tree] {
         &self.nodes
