@@ -1,6 +1,9 @@
 //! Utilities for formatting and writing trace trees.
-use crate::processor::{self, Processor};
-use crate::tree::Tree;
+use crate::tree::{Tree, Event};
+use crate::{
+    processor::{self, Processor},
+    Tag,
+};
 use std::error::Error;
 use std::io::{self, Write};
 use tracing_subscriber::fmt::MakeWriter;
@@ -9,6 +12,9 @@ mod pretty;
 pub use pretty::Pretty;
 
 /// Format a [`Tree`] into a `String`.
+///
+/// You can override this trait to implement completely custom rendering of `Tree`s, or you can use the other types in
+/// this module to override only the parts you care about most.
 ///
 /// # Examples
 ///
@@ -66,6 +72,77 @@ where
     fn fmt(&self, tree: &Tree) -> Result<String, E> {
         self(tree)
     }
+}
+
+/// Information about a level of indentation and where a log entry is within it.
+///
+/// For example, in a log that looks something like this:
+///
+/// ```yml
+/// span 1:
+/// - span a:
+///   - entry i
+///   - span ii:
+///     - entry 1
+///     - entry 2
+/// - entry b
+/// ```
+///
+/// - "span 1" would see `&[Level { index: 0, total: 1 }]`
+/// - "entry i" would see `&[Level { index: 0, total: 1 }, Level { index: 0, total: 2 }, Level { index: 0, total: 2 }]`
+/// - "entry 2" would see `&[Level { index: 0, total: 1 }, Level { index: 0, total: 2 }, Level { index: 1, total: 2 }, Level { index: 1, total: 2 }]`
+/// - "entry b" would see `&[Level { index: 0, total: 1 }, Level { index: 1, total: 2 }]`
+pub struct Indent {
+    /// The index of this entry at this level of indentation. Zero-indexed.
+    pub index: usize,
+    /// The total number of entries at this level of indentation.
+    pub total: usize,
+    /// Where this level of indentation comes from.
+    /// 
+    /// If `true`, it came from a `Span`, i.e. the level of indentation was caused by a span open as of this line
+    /// being rendered. If `false`, it came from a multi-line `Entry`, i.e. the relevant [`FormatEntry`] returned a
+    /// multi-line string.
+    pub span: bool,
+}
+
+/// Format a single level of indentation into a `String`.
+///
+/// # Examples
+///
+/// ```rust
+/// // TODO: Code sample showing off how this could work
+/// /*
+/// async {
+///     debug!("here is a log line")
+/// }.instrument(debug_span!("here is a span"))
+/// */
+/// ```
+/// Produces the following result:
+/// ```txt
+/// DEBUG    here is a span [ 0µs | 0.00% / 100.00% ]
+/// DEBUG      🐛 [debug]: An untagged debug log
+/// ```
+pub trait FormatIndents {
+    /// The error type if the levels can't be formatted into indentation.
+    type Error: Error + Send + Sync;
+
+    /// Given a set of indentation levels, render them into a string.
+    fn fmt_indent(&self, levels: &[Indent]) -> Result<String, Self::Error>;
+}
+
+/// Format a log event, including tag, message, and fields
+pub trait FormatEvent {
+    /// The error type if the event can't be formatted.
+    type Error: Error + Send + Sync;
+
+    /// Given a log event, format it into a string.
+    /// 
+    /// This does **not** render the indentation, only the event itself. See [`FormatIndents`].
+    /// 
+    /// The string can contain newlines. If it does, this event essentially gets treated as a span, for formatting,
+    /// with each line in the output being rendered equivalently to a (single-line) event under a span. In other words,
+    /// it should just work how you expect.
+    fn fmt_event(&self, event: &Event) -> Result<String, Self::Error>;
 }
 
 /// A [`Processor`] that formats and writes logs.
