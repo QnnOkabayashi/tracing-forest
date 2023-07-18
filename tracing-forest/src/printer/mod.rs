@@ -1,9 +1,6 @@
 //! Utilities for formatting and writing trace trees.
-use crate::tree::{Tree, Event};
-use crate::{
-    processor::{self, Processor},
-    Tag,
-};
+use crate::processor::{self, Processor};
+use crate::tree::{Event, Tree};
 use std::error::Error;
 use std::io::{self, Write};
 use tracing_subscriber::fmt::MakeWriter;
@@ -98,7 +95,7 @@ pub struct Indent {
     /// The total number of entries at this level of indentation.
     pub total: usize,
     /// Where this level of indentation comes from.
-    /// 
+    ///
     /// If `true`, it came from a `Span`, i.e. the level of indentation was caused by a span open as of this line
     /// being rendered. If `false`, it came from a multi-line `Entry`, i.e. the relevant [`FormatEntry`] returned a
     /// multi-line string.
@@ -136,9 +133,9 @@ pub trait FormatEvent {
     type Error: Error + Send + Sync;
 
     /// Given a log event, format it into a string.
-    /// 
+    ///
     /// This does **not** render the indentation, only the event itself. See [`FormatIndents`].
-    /// 
+    ///
     /// The string can contain newlines. If it does, this event essentially gets treated as a span, for formatting,
     /// with each line in the output being rendered equivalently to a (single-line) event under a span. In other words,
     /// it should just work how you expect.
