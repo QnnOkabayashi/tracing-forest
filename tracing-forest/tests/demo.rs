@@ -44,7 +44,7 @@ fn pretty_example() {
         Registry::default().with(layer)
     });
 
-    info_span!("try_from_entry_ro").in_scope(|| {
+    info_span!("try_from_entry_ro", defer = true).in_scope(|| {
         info_span!("server::internal_search").in_scope(|| {
             info!(target: "filter", "Some filter info...");
             info_span!("server::search").in_scope(|| {
@@ -63,6 +63,9 @@ fn pretty_example() {
                 info_span!("be::idl_arc_sqlite::get_identry").in_scope(|| {
                     error!(target: "security", "A security critical log");
                     info!(target: "security", "A security access log");
+                });
+                info_span!("defer_span", defer = true).in_scope(|| {
+                    // Should not be visible.
                 });
             });
             info_span!("server::search<filter_resolve>").in_scope(|| {

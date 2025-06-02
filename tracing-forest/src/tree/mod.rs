@@ -105,6 +105,11 @@ pub(crate) struct Shared {
     /// Key-value data.
     #[cfg_attr(feature = "serde", serde(serialize_with = "ser::fields"))]
     pub(crate) fields: FieldSet,
+
+    /// This span is only displayed *if* there are child nodes in the tree. Else it
+    /// will NOT be rendered.
+    #[cfg(feature = "defer")]
+    pub(crate) defer_unless_children_attached: bool,
 }
 
 /// Error returned by [`Tree::event`][event].
