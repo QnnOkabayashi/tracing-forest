@@ -137,6 +137,11 @@ impl Pretty {
         indent: &mut IndentVec,
         writer: &mut String,
     ) -> fmt::Result {
+        #[cfg(feature = "defer")]
+        if span.shared.defer_unless_children_attached && span.nodes().is_empty() {
+            return Ok(());
+        }
+
         let total_duration = span.total_duration().as_nanos() as f64;
         let inner_duration = span.inner_duration().as_nanos() as f64;
         let root_duration = duration_root.unwrap_or(total_duration);
