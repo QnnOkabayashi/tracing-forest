@@ -50,6 +50,7 @@ pub trait Processor: 'static + Sized {
     /// `Box<dyn Error + Send + Sync>`. If the processor is configured with a
     /// fallback processor from [`Processor::or`], then the `Tree` is deferred
     /// to that processor.
+    #[allow(clippy::result_large_err)]
     fn process(&self, tree: Tree) -> Result;
 
     /// Returns a `Processor` that first attempts processing with `self`, and

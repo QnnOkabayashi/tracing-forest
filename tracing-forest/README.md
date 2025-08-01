@@ -39,10 +39,7 @@ tracing-forest = { version = "0.1.6", features = ["full"] }
 ```
 Then, add `tracing_forest::init` to your main function:
 ```rust
-fn main() {
-    tracing_forest::init();
-    // ...
-}
+tracing_forest::init();
 ```
 
 # Contextual coherence in action

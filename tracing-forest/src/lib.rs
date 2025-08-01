@@ -39,11 +39,7 @@
 //! ```
 //! Then, add [`tracing_forest::init`](crate::init) to your main function:
 //! ```
-//! fn main() {
-//!     // Initialize a default `ForestLayer` subscriber
-//!     tracing_forest::init();
-//!     // ...
-//! }
+//! tracing_forest::init();
 //! ```
 //! This crate also provides tools for much more advanced configurations:
 //! ```

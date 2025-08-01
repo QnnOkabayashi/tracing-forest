@@ -21,13 +21,13 @@ use tracing::Level;
 /// ```txt
 /// <NAME> [ <DURATION> | <BODY> / <ROOT> ]
 /// ```
-/// * `DURATION` represents the total time the span was entered for. If the span
-/// was used to instrument a `Future` that sleeps, then that time won't be counted
-/// since the `Future` won't be polled during that time, and so the span won't enter.
-/// * `BODY` represents the percent time the span is entered relative to the root
-/// span, *excluding* time that any child spans are entered.
-/// * `ROOT` represents the percent time the span is entered relative to the root
-/// span, *including* time that any child spans are entered.
+/// * DURATION represents the total time the span was entered for. If the span
+///   was used to instrument a `Future` that sleeps, then that time won't be counted
+///   since the `Future` won't be polled during that time, and so the span won't enter.
+/// * BODY represents the percent time the span is entered relative to the root
+///   span, *excluding* time that any child spans are entered.
+/// * ROOT represents the percent time the span is entered relative to the root
+///   span, *including* time that any child spans are entered.
 ///
 /// As a mental model, look at `ROOT` to quickly narrow down which branches are
 /// costly, and look at `BASE` to pinpoint exactly which spans are expensive.
