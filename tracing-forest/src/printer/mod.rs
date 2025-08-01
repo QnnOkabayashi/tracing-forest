@@ -200,7 +200,7 @@ where
             .fmt(&tree)
             .map_err(|e| processor::error(tree, e.into()))?;
 
-        print!("{}", string);
+        print!("{string}");
         Ok(())
     }
 }

@@ -147,7 +147,7 @@ where
 {
     fn process(&self, tree: Tree) -> Result {
         self.primary.process(tree).or_else(|err| {
-            eprintln!("{}, using fallback processor...", err);
+            eprintln!("{err}, using fallback processor...");
             self.fallback.process(err.tree)
         })
     }

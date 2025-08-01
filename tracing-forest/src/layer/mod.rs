@@ -41,7 +41,7 @@ impl OpenedSpan {
                 let mut buf = [0u8; LENGTH];
                 let mut remaining = &mut buf[..];
 
-                if let Ok(()) = write!(remaining, "{:?}", value) {
+                if let Ok(()) = write!(remaining, "{value:?}") {
                     let len = LENGTH - remaining.len();
                     if let Some(parsed) = id::try_parse(&buf[..len]) {
                         maybe_uuid = Some(parsed);
@@ -50,7 +50,7 @@ impl OpenedSpan {
                 return;
             }
 
-            let value = format!("{:?}", value);
+            let value = format!("{value:?}");
             fields.push(tree::Field::new(field.name(), value));
         });
 
@@ -178,7 +178,7 @@ where
             }
 
             fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
-                let value = format!("{:?}", value);
+                let value = format!("{value:?}");
                 match field.name() {
                     "message" if self.message.is_none() => self.message = Some(value),
                     key => self.fields.push(tree::Field::new(key, value)),
@@ -298,7 +298,7 @@ where
             .expect(fail::OPENED_SPAN_NOT_IN_EXTENSIONS)
             .span
             .uuid();
-        write!(writer, "{} ", uuid)?;
+        write!(writer, "{uuid} ")?;
     }
 
     #[cfg(feature = "chrono")]
@@ -319,10 +319,10 @@ where
     // we should just do pretty printing here.
 
     if let Some(message) = event.message() {
-        write!(writer, "{}", message)?;
+        write!(writer, "{message}")?;
     }
 
-    for field in event.fields().iter() {
+    for field in event.fields() {
         write!(writer, " | {}: {}", field.key(), field.value())?;
     }
 
