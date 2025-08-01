@@ -125,7 +125,7 @@ impl Pretty {
         }
 
         for field in event.fields() {
-            write!(writer, " | {}: {}", field.key(), field.value())?;
+            write!(writer, " | {}: {}", FieldKey(field.key()), field.value())?;
         }
 
         writeln!(writer)
@@ -158,17 +158,11 @@ impl Pretty {
         write!(writer, "{percent_total_of_root_duration:.2}% ]")?;
 
         for (n, field) in span.shared.fields.iter().enumerate() {
-            let (grey, reset) = if cfg!(feature = "ansi") {
-                ("\x1b37m", "\x1b[0m")
-            } else {
-                ("", "")
-            };
-
             write!(
                 writer,
-                "{} {grey}{}{reset}: {}",
+                "{} {}: {}",
                 if n == 0 { "" } else { " |" },
-                field.key(),
+                FieldKey(field.key()),
                 field.value()
             )?;
         }
@@ -237,6 +231,24 @@ impl fmt::Display for DurationDisplay {
             t /= 1000.0;
         }
         write!(f, "{:.0}s", t * 1000.0)
+    }
+}
+
+/// Implements colored formatting for a field if enabled
+struct FieldKey<'a>(&'a str);
+
+impl fmt::Display for FieldKey<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        #[cfg(feature = "ansi")]
+        {
+            let color = Color::White.dimmed();
+
+            write!(f, "{}{}{}", color.prefix(), self.0, color.suffix())
+        }
+        #[cfg(not(feature = "ansi"))]
+        {
+            f.write_str(self.0)
+        }
     }
 }
 
