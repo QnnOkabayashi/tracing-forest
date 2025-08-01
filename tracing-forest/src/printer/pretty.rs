@@ -158,9 +158,15 @@ impl Pretty {
         write!(writer, "{percent_total_of_root_duration:.2}% ]")?;
 
         for (n, field) in span.shared.fields.iter().enumerate() {
+            let (grey, reset) = if cfg!(feature = "ansi") {
+                ("\x1b37m", "\x1b[0m")
+            } else {
+                ("", "")
+            };
+
             write!(
                 writer,
-                "{} {}: {}",
+                "{} {grey}{}{reset}: {}",
                 if n == 0 { "" } else { " |" },
                 field.key(),
                 field.value()
