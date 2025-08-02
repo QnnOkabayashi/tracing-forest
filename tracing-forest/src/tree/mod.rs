@@ -205,6 +205,13 @@ impl Tree {
             Tree::Span(span) => Ok(span),
         }
     }
+
+    pub(crate) fn should_render(&self) -> bool {
+        match self {
+            Tree::Event(_) => true,
+            Tree::Span(span) => span.should_render(),
+        }
+    }
 }
 
 impl Event {
@@ -257,6 +264,16 @@ impl Span {
     pub(crate) fn defer_unless_children_attached(mut self, defer: bool) -> Self {
         self.defer_unless_children_attached = defer;
         self
+    }
+
+    #[cfg(feature = "defer")]
+    pub(crate) fn should_render(&self) -> bool {
+        !(self.defer_unless_children_attached && self.nodes().is_empty())
+    }
+
+    #[cfg(not(feature = "defer"))]
+    pub(crate) fn should_render(&self) -> bool {
+        true
     }
 
     /// Returns the span's [`Uuid`].

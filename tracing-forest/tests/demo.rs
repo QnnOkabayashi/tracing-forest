@@ -44,7 +44,7 @@ fn pretty_example() {
         Registry::default().with(layer)
     });
 
-    info_span!("try_from_entry_ro", defer = true).in_scope(|| {
+    info_span!("try_from_entry_ro").in_scope(|| {
         info_span!("server::internal_search").in_scope(|| {
             info!(target: "filter", "Some filter info...");
             info_span!("server::search").in_scope(|| {
@@ -65,7 +65,11 @@ fn pretty_example() {
                     info!(target: "security", "A security access log");
                 });
                 info_span!("defer_span", defer = true).in_scope(|| {
-                    // Should not be visible.
+                    info!("A child event makes defered spans render");
+                });
+                info_span!("defer_span", defer = true).in_scope(|| {
+                    // This will print nothing because it was deferred
+                    // and there are no child events.
                 });
             });
             info_span!("server::search<filter_resolve>").in_scope(|| {
