@@ -21,13 +21,13 @@ use tracing::Level;
 /// ```txt
 /// <NAME> [ <DURATION> | <BODY> / <ROOT> ]
 /// ```
-/// * `DURATION` represents the total time the span was entered for. If the span
-/// was used to instrument a `Future` that sleeps, then that time won't be counted
-/// since the `Future` won't be polled during that time, and so the span won't enter.
-/// * `BODY` represents the percent time the span is entered relative to the root
-/// span, *excluding* time that any child spans are entered.
-/// * `ROOT` represents the percent time the span is entered relative to the root
-/// span, *including* time that any child spans are entered.
+/// * DURATION represents the total time the span was entered for. If the span
+///   was used to instrument a `Future` that sleeps, then that time won't be counted
+///   since the `Future` won't be polled during that time, and so the span won't enter.
+/// * BODY represents the percent time the span is entered relative to the root
+///   span, *excluding* time that any child spans are entered.
+/// * ROOT represents the percent time the span is entered relative to the root
+///   span, *including* time that any child spans are entered.
 ///
 /// As a mental model, look at `ROOT` to quickly narrow down which branches are
 /// costly, and look at `BASE` to pinpoint exactly which spans are expensive.
@@ -124,7 +124,7 @@ impl Pretty {
             writer.write_str(message)?;
         }
 
-        for field in event.fields().iter() {
+        for field in event.fields() {
             write!(writer, " | {}: {}", field.key(), field.value())?;
         }
 
@@ -152,10 +152,10 @@ impl Pretty {
         if inner_duration > 0.0 {
             let base_duration = span.base_duration().as_nanos() as f64;
             let percent_base_of_root_duration = 100.0 * base_duration / root_duration;
-            write!(writer, "{:.2}% / ", percent_base_of_root_duration)?;
+            write!(writer, "{percent_base_of_root_duration:.2}% / ")?;
         }
 
-        write!(writer, "{:.2}% ]", percent_total_of_root_duration)?;
+        write!(writer, "{percent_total_of_root_duration:.2}% ]")?;
 
         for (n, field) in span.shared.fields.iter().enumerate() {
             write!(
@@ -222,11 +222,11 @@ impl fmt::Display for DurationDisplay {
         let mut t = self.0;
         for unit in ["ns", "µs", "ms", "s"] {
             if t < 10.0 {
-                return write!(f, "{:.2}{}", t, unit);
+                return write!(f, "{t:.2}{unit}");
             } else if t < 100.0 {
-                return write!(f, "{:.1}{}", t, unit);
+                return write!(f, "{t:.1}{unit}");
             } else if t < 1000.0 {
-                return write!(f, "{:.0}{}", t, unit);
+                return write!(f, "{t:.0}{unit}");
             }
             t /= 1000.0;
         }
