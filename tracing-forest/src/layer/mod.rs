@@ -33,6 +33,8 @@ impl OpenedSpan {
         let mut fields = FieldSet::default();
         #[cfg(feature = "uuid")]
         let mut maybe_uuid = None;
+        #[cfg(feature = "uuid")]
+        let mut defer = false;
 
         attrs.record(&mut |field: &Field, value: &dyn fmt::Debug| {
             #[cfg(feature = "uuid")]
@@ -47,6 +49,12 @@ impl OpenedSpan {
                         maybe_uuid = Some(parsed);
                     }
                 }
+                return;
+            }
+
+            #[cfg(feature = "defer")]
+            if field.name() == "defer" {
+                defer = true;
                 return;
             }
 
@@ -71,8 +79,13 @@ impl OpenedSpan {
             }),
         };
 
+        let span = tree::Span::new(shared, attrs.metadata().name());
+
+        #[cfg(feature = "defer")]
+        let span = span.defer_unless_children_attached(defer);
+
         OpenedSpan {
-            span: tree::Span::new(shared, attrs.metadata().name()),
+            span,
             start: Instant::now(),
         }
     }

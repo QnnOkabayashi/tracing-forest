@@ -84,6 +84,11 @@ pub struct Span {
 
     /// Events and spans collected while the span was open.
     pub(crate) nodes: Vec<Tree>,
+
+    /// This span is only displayed *if* there are child nodes in the tree. Else it
+    /// will NOT be rendered.
+    #[cfg(feature = "defer")]
+    pub(crate) defer_unless_children_attached: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -200,6 +205,13 @@ impl Tree {
             Tree::Span(span) => Ok(span),
         }
     }
+
+    pub(crate) fn should_render(&self) -> bool {
+        match self {
+            Tree::Event(_) => true,
+            Tree::Span(span) => span.should_render(),
+        }
+    }
 }
 
 impl Event {
@@ -244,7 +256,24 @@ impl Span {
             total_duration: Duration::ZERO,
             inner_duration: Duration::ZERO,
             nodes: Vec::new(),
+            defer_unless_children_attached: false,
         }
+    }
+
+    #[cfg(feature = "defer")]
+    pub(crate) fn defer_unless_children_attached(mut self, defer: bool) -> Self {
+        self.defer_unless_children_attached = defer;
+        self
+    }
+
+    #[cfg(feature = "defer")]
+    pub(crate) fn should_render(&self) -> bool {
+        !(self.defer_unless_children_attached && self.nodes().is_empty())
+    }
+
+    #[cfg(not(feature = "defer"))]
+    pub(crate) fn should_render(&self) -> bool {
+        true
     }
 
     /// Returns the span's [`Uuid`].

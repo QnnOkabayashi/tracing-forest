@@ -257,6 +257,7 @@
 //! * `tokio`: Enables [`worker_task`] and [`capture`].
 //! * `serde`: Enables log trees to be serialized, which is [useful for formatting][serde_fmt].
 //! * `env-filter`: Re-exports [`EnvFilter`] from the [`util`] module.
+//! * `defer`: Allows marking a span with `defer = true` so that it will not be displayed unless it has child nodes.
 //!
 //! By default, only `smallvec` in enabled.
 //!

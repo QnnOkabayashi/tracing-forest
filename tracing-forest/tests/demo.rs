@@ -64,6 +64,13 @@ fn pretty_example() {
                     error!(target: "security", "A security critical log");
                     info!(target: "security", "A security access log");
                 });
+                info_span!("defer_span", defer = true).in_scope(|| {
+                    info!("A child event makes defered spans render");
+                });
+                info_span!("defer_span", defer = true).in_scope(|| {
+                    // This will print nothing because it was deferred
+                    // and there are no child events.
+                });
             });
             info_span!("server::search<filter_resolve>").in_scope(|| {
                 warn!(target: "filter", "Some filter warning");
