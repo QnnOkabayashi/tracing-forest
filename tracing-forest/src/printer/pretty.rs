@@ -138,7 +138,7 @@ impl Pretty {
         writer: &mut String,
     ) -> fmt::Result {
         #[cfg(feature = "defer")]
-        if span.shared.defer_unless_children_attached && span.nodes().is_empty() {
+        if span.defer_unless_children_attached && span.nodes().is_empty() {
             return Ok(());
         }
 

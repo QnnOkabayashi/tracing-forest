@@ -84,6 +84,11 @@ pub struct Span {
 
     /// Events and spans collected while the span was open.
     pub(crate) nodes: Vec<Tree>,
+
+    /// This span is only displayed *if* there are child nodes in the tree. Else it
+    /// will NOT be rendered.
+    #[cfg(feature = "defer")]
+    pub(crate) defer_unless_children_attached: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -105,11 +110,6 @@ pub(crate) struct Shared {
     /// Key-value data.
     #[cfg_attr(feature = "serde", serde(serialize_with = "ser::fields"))]
     pub(crate) fields: FieldSet,
-
-    /// This span is only displayed *if* there are child nodes in the tree. Else it
-    /// will NOT be rendered.
-    #[cfg(feature = "defer")]
-    pub(crate) defer_unless_children_attached: bool,
 }
 
 /// Error returned by [`Tree::event`][event].
@@ -249,7 +249,14 @@ impl Span {
             total_duration: Duration::ZERO,
             inner_duration: Duration::ZERO,
             nodes: Vec::new(),
+            defer_unless_children_attached: false,
         }
+    }
+
+    #[cfg(feature = "defer")]
+    pub(crate) fn defer_unless_children_attached(mut self, defer: bool) -> Self {
+        self.defer_unless_children_attached = defer;
+        self
     }
 
     /// Returns the span's [`Uuid`].
