@@ -137,8 +137,7 @@ impl Pretty {
         indent: &mut IndentVec,
         writer: &mut String,
     ) -> fmt::Result {
-        #[cfg(feature = "defer")]
-        if span.defer_unless_children_attached && span.nodes().is_empty() {
+        if !span.should_render() {
             return Ok(());
         }
 
@@ -173,7 +172,15 @@ impl Pretty {
         }
         writeln!(writer)?;
 
-        if let Some((last, remaining)) = span.nodes().split_last() {
+        // We need to limit our nodes to those that *will* render, else we
+        // end up printing ghost indents.
+        let nodes: Vec<_> = span
+            .nodes()
+            .iter()
+            .filter(|node| node.should_render())
+            .collect();
+
+        if let Some((last, remaining)) = nodes.split_last() {
             match indent.last_mut() {
                 Some(edge @ Indent::Turn) => *edge = Indent::Null,
                 Some(edge @ Indent::Fork) => *edge = Indent::Line,
