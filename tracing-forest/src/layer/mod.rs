@@ -33,6 +33,8 @@ impl OpenedSpan {
         let mut fields = FieldSet::default();
         #[cfg(feature = "uuid")]
         let mut maybe_uuid = None;
+        #[cfg(feature = "uuid")]
+        let mut defer = false;
 
         attrs.record(&mut |field: &Field, value: &dyn fmt::Debug| {
             #[cfg(feature = "uuid")]
@@ -41,7 +43,7 @@ impl OpenedSpan {
                 let mut buf = [0u8; LENGTH];
                 let mut remaining = &mut buf[..];
 
-                if let Ok(()) = write!(remaining, "{:?}", value) {
+                if let Ok(()) = write!(remaining, "{value:?}") {
                     let len = LENGTH - remaining.len();
                     if let Some(parsed) = id::try_parse(&buf[..len]) {
                         maybe_uuid = Some(parsed);
@@ -50,7 +52,13 @@ impl OpenedSpan {
                 return;
             }
 
-            let value = format!("{:?}", value);
+            #[cfg(feature = "defer")]
+            if field.name() == "defer" {
+                defer = true;
+                return;
+            }
+
+            let value = format!("{value:?}");
             fields.push(tree::Field::new(field.name(), value));
         });
 
@@ -71,8 +79,13 @@ impl OpenedSpan {
             }),
         };
 
+        let span = tree::Span::new(shared, attrs.metadata().name());
+
+        #[cfg(feature = "defer")]
+        let span = span.defer_unless_children_attached(defer);
+
         OpenedSpan {
-            span: tree::Span::new(shared, attrs.metadata().name()),
+            span,
             start: Instant::now(),
         }
     }
@@ -178,7 +191,7 @@ where
             }
 
             fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
-                let value = format!("{:?}", value);
+                let value = format!("{value:?}");
                 match field.name() {
                     "message" if self.message.is_none() => self.message = Some(value),
                     key => self.fields.push(tree::Field::new(key, value)),
@@ -298,7 +311,7 @@ where
             .expect(fail::OPENED_SPAN_NOT_IN_EXTENSIONS)
             .span
             .uuid();
-        write!(writer, "{} ", uuid)?;
+        write!(writer, "{uuid} ")?;
     }
 
     #[cfg(feature = "chrono")]
@@ -319,10 +332,10 @@ where
     // we should just do pretty printing here.
 
     if let Some(message) = event.message() {
-        write!(writer, "{}", message)?;
+        write!(writer, "{message}")?;
     }
 
-    for field in event.fields().iter() {
+    for field in event.fields() {
         write!(writer, " | {}: {}", field.key(), field.value())?;
     }
 

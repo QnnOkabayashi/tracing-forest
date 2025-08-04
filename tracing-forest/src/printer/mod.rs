@@ -89,7 +89,7 @@ pub struct MakeStdout;
 #[derive(Debug)]
 pub struct MakeStderr;
 
-impl<'a> MakeWriter<'a> for MakeStdout {
+impl MakeWriter<'_> for MakeStdout {
     type Writer = io::Stdout;
 
     fn make_writer(&self) -> Self::Writer {
@@ -97,7 +97,7 @@ impl<'a> MakeWriter<'a> for MakeStdout {
     }
 }
 
-impl<'a> MakeWriter<'a> for MakeStderr {
+impl MakeWriter<'_> for MakeStderr {
     type Writer = io::Stderr;
 
     fn make_writer(&self) -> Self::Writer {
@@ -184,6 +184,7 @@ pub struct TestCapturePrinter<F> {
 impl TestCapturePrinter<Pretty> {
     /// Construct a new test capturing printer with the default `Pretty` formatter. This printer
     /// is intented for use in tests only as it works with the default rust stdout capture mechanism
+    #[allow(clippy::new_without_default)]
     pub const fn new() -> Self {
         TestCapturePrinter { formatter: Pretty }
     }
@@ -199,7 +200,7 @@ where
             .fmt(&tree)
             .map_err(|e| processor::error(tree, e.into()))?;
 
-        print!("{}", string);
+        print!("{string}");
         Ok(())
     }
 }
