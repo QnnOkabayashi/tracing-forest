@@ -256,6 +256,7 @@ impl Span {
             total_duration: Duration::ZERO,
             inner_duration: Duration::ZERO,
             nodes: Vec::new(),
+            #[cfg(feature = "defer")]
             defer_unless_children_attached: false,
         }
     }
