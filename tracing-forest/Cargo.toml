@@ -1,14 +1,14 @@
 [package]
 name = "tracing-forest"
-version = "0.1.6"
+version = "0.2.0"
 authors = ["Quinn Okabayashi"]
 edition = "2018"
 description = "Preserving contextual coherence among trace data from concurrent tasks"
 keywords = ["tracing", "async", "tokio", "tracing-subscriber", "logging"]
 categories = [
-	"asynchronous",
-	"development-tools::debugging",
-	"development-tools::profiling",
+    "asynchronous",
+    "development-tools::debugging",
+    "development-tools::profiling",
 ]
 license = "MIT"
 repository = "https://github.com/QnnOkabayashi/tracing-forest"
