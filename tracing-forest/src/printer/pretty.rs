@@ -124,7 +124,6 @@ impl Pretty {
             writer.write_str(message)?;
         }
 
-
         for field in event.fields() {
             write!(writer, " | {}: {}", FieldKey(field.key()), field.value())?;
         }
