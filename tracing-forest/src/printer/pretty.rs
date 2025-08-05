@@ -124,8 +124,9 @@ impl Pretty {
             writer.write_str(message)?;
         }
 
+
         for field in event.fields() {
-            write!(writer, " | {}: {}", field.key(), field.value())?;
+            write!(writer, " | {}: {}", FieldKey(field.key()), field.value())?;
         }
 
         writeln!(writer)
@@ -166,7 +167,7 @@ impl Pretty {
                 writer,
                 "{} {}: {}",
                 if n == 0 { "" } else { " |" },
-                field.key(),
+                FieldKey(field.key()),
                 field.value()
             )?;
         }
@@ -243,6 +244,24 @@ impl fmt::Display for DurationDisplay {
             t /= 1000.0;
         }
         write!(f, "{:.0}s", t * 1000.0)
+    }
+}
+
+/// Implements colored formatting for a field if enabled
+struct FieldKey<'a>(&'a str);
+
+impl fmt::Display for FieldKey<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        #[cfg(feature = "ansi")]
+        {
+            let color = Color::White.dimmed();
+
+            write!(f, "{}{}{}", color.prefix(), self.0, color.suffix())
+        }
+        #[cfg(not(feature = "ansi"))]
+        {
+            f.write_str(self.0)
+        }
     }
 }
 
