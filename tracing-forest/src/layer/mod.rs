@@ -9,7 +9,7 @@ use std::fmt;
 use std::io::{self, Write};
 use std::time::Instant;
 use tracing::field::{Field, Visit};
-use tracing::span::{Attributes, Id};
+use tracing::span::{Attributes, Id, Record};
 use tracing::{Event, Subscriber};
 use tracing_subscriber::layer::{Context, Layer, SubscriberExt};
 use tracing_subscriber::registry::{LookupSpan, Registry, SpanRef};
@@ -173,6 +173,40 @@ where
 
         let mut extensions = span.extensions_mut();
         extensions.insert(opened);
+    }
+
+    fn on_record(&self, span: &Id, values: &Record<'_>, ctx: Context<'_, S>) {
+        struct Visitor<'a> {
+            fields: &'a mut FieldSet,
+        }
+
+        impl<'a> Visit for Visitor<'a> {
+            fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+                let value = format!("{:?}", value);
+                let new_field = tree::Field::new(field.name(), value);
+
+                if let Some(old_field) = self
+                    .fields
+                    .iter_mut()
+                    .find(|old_field| old_field.key() == field.name())
+                {
+                    *old_field = new_field;
+                } else {
+                    self.fields.push(new_field);
+                }
+            }
+        }
+
+        let span = ctx.span(span).expect(fail::SPAN_NOT_IN_CONTEXT);
+        let mut extensions = span.extensions_mut();
+        let openedspan = extensions
+            .get_mut::<OpenedSpan>()
+            .expect(fail::OPENED_SPAN_NOT_IN_EXTENSIONS);
+
+        let mut visitor = Visitor {
+            fields: &mut openedspan.span.shared.fields,
+        };
+        values.record(&mut visitor);
     }
 
     fn on_event(&self, event: &Event, ctx: Context<S>) {
