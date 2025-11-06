@@ -171,6 +171,10 @@ where
         let span = ctx.span(id).expect(fail::SPAN_NOT_IN_CONTEXT);
         let opened = OpenedSpan::new(attrs, &ctx);
 
+        if !ctx.enabled(attrs.metadata()) {
+            return;
+        }
+
         let mut extensions = span.extensions_mut();
         extensions.insert(opened);
     }
