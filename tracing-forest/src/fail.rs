@@ -1,5 +1,3 @@
-use crate::cfg_uuid;
-
 pub const SPAN_NOT_IN_CONTEXT: &str = "Span not in context, this is a bug";
 pub const OPENED_SPAN_NOT_IN_EXTENSIONS: &str =
     "Span extension doesn't contain `OpenedSpan`, this is a bug";

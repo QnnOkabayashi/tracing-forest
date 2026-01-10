@@ -87,6 +87,13 @@ impl Pretty {
                 Pretty::format_event(event, writer)
             }
             Tree::Span(span) => {
+                // This needs to be called before all other actions are taken. If we don't
+                // do this now, we end up rendering every shared item of defered spans, but
+                // they are incomplete and we end up with a lot of junk on screen.
+                if !span.should_render() {
+                    return Ok(());
+                }
+
                 Pretty::format_shared(&span.shared, writer)?;
                 Pretty::format_indent(indent, writer)?;
                 Pretty::format_span(span, duration_root, indent, writer)
@@ -137,10 +144,6 @@ impl Pretty {
         indent: &mut IndentVec,
         writer: &mut String,
     ) -> fmt::Result {
-        if !span.should_render() {
-            return Ok(());
-        }
-
         let total_duration = span.total_duration().as_nanos() as f64;
         let inner_duration = span.inner_duration().as_nanos() as f64;
         let root_duration = duration_root.unwrap_or(total_duration);
