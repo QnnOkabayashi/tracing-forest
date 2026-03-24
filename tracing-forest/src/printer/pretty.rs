@@ -9,7 +9,7 @@ type IndentVec = smallvec::SmallVec<[Indent; 32]>;
 type IndentVec = Vec<Indent>;
 
 #[cfg(feature = "ansi")]
-use ansi_term::Color;
+use nu_ansi_term::Color;
 #[cfg(feature = "ansi")]
 use tracing::Level;
 
@@ -278,7 +278,7 @@ impl fmt::Display for ColorLevel {
             Level::TRACE => Color::Purple,
             Level::DEBUG => Color::Blue,
             Level::INFO => Color::Green,
-            Level::WARN => Color::RGB(252, 234, 160), // orange
+            Level::WARN => Color::Rgb(252, 234, 160), // orange
             Level::ERROR => Color::Red,
         };
         let style = color.bold();
