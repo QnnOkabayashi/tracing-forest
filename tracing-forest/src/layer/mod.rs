@@ -33,7 +33,7 @@ impl OpenedSpan {
         let mut fields = FieldSet::default();
         #[cfg(feature = "uuid")]
         let mut maybe_uuid = None;
-        #[cfg(feature = "uuid")]
+        #[cfg(feature = "defer")]
         let mut defer = false;
 
         attrs.record(&mut |field: &Field, value: &dyn fmt::Debug| {
