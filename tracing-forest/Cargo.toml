@@ -21,12 +21,14 @@ full = [
     "smallvec",
     "tokio",
     "serde",
+    "serde_json",
     "env-filter",
     "ansi",
     "defer",
 ]
 env-filter = ["tracing-subscriber/env-filter"]
 ansi = ["nu-ansi-term"]
+json = ["serde", "serde_json", "chrono/serde"]
 defer = []
 
 [dependencies]
@@ -56,6 +58,10 @@ optional = true
 [dependencies.serde]
 version = "1.0"
 features = ["derive"]
+optional = true
+
+[dependencies.serde_json]
+version = "1.0"
 optional = true
 
 [dependencies.nu-ansi-term]

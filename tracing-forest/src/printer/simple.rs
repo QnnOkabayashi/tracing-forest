@@ -18,7 +18,7 @@ impl Formatter for Simple {
     fn fmt(&self, tree: &Tree) -> Result<String, fmt::Error> {
         let mut writer = String::with_capacity(256);
 
-        Simple::format_tree(tree, None, &mut IndentVec::with_capacity(8), &mut writer)?;
+        Self::format_tree(tree, None, &mut IndentVec::with_capacity(8), &mut writer)?;
 
         Ok(writer)
     }
@@ -59,8 +59,7 @@ impl Simple {
         #[cfg(feature = "chrono")]
         write!(writer, "{:<36} ", shared.timestamp.to_rfc3339())?;
 
-        #[cfg(not(feature = "ansi"))]
-        return write!(writer, "{:<8} ", shared.level);
+        write!(writer, "{:<8} ", shared.level)
     }
 
     fn format_indent(indent: &[Indent], writer: &mut String) -> fmt::Result {

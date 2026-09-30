@@ -1,11 +1,11 @@
 #![cfg(feature = "serde")]
-use tracing_forest::{traits::*, util::*, Printer, Tag};
+use tracing_forest::{traits::*, util::*, PrettyPrinter, Tag};
 use tracing_subscriber::Registry;
 
 #[test]
 #[ignore]
 fn test_manual_with_json() {
-    let processor = Printer::new().formatter(serde_json::to_string_pretty);
+    let processor = PrettyPrinter::default().formatter(serde_json::to_string_pretty);
     let layer = ForestLayer::from(processor);
     let subscriber = Registry::default().with(layer);
     tracing::subscriber::with_default(subscriber, || {
@@ -39,7 +39,7 @@ fn pretty_tag(event: &Event) -> Option<Tag> {
 #[test]
 fn pretty_example() {
     let _guard = tracing::subscriber::set_default({
-        let layer = ForestLayer::new(Printer::new(), pretty_tag);
+        let layer = ForestLayer::new(PrettyPrinter::default(), pretty_tag);
 
         Registry::default().with(layer)
     });

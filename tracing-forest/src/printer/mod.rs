@@ -5,10 +5,16 @@ use std::error::Error;
 use std::io::{self, Write};
 use tracing_subscriber::fmt::MakeWriter;
 
+#[cfg(feature = "json")]
+mod json;
+
 mod pretty;
 mod simple;
 
 pub(crate) mod shared;
+
+#[cfg(feature = "json")]
+pub use json::Json;
 
 pub use pretty::Pretty;
 pub use simple::Simple;
@@ -228,5 +234,29 @@ impl SimplePrinter {
 impl Default for SimplePrinter {
     fn default() -> Self {
         SimplePrinter::new()
+    }
+}
+
+/// A [`Processor`] that provides a json structured output to stdout.
+#[cfg(feature = "json")]
+pub type JsonPrinter = Printer<Json, MakeStdout>;
+
+#[cfg(feature = "json")]
+impl JsonPrinter {
+    /// Returns a new [`JsonPrinter`] that prints to stdout.
+    ///
+    /// Use [`Printer::formatter`] and [`Printer::writer`] for custom configuration.
+    pub const fn new() -> Self {
+        Printer {
+            formatter: Json,
+            make_writer: MakeStdout,
+        }
+    }
+}
+
+#[cfg(feature = "json")]
+impl Default for JsonPrinter {
+    fn default() -> Self {
+        JsonPrinter::new()
     }
 }
