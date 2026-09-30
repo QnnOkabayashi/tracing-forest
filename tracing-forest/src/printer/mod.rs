@@ -6,7 +6,12 @@ use std::io::{self, Write};
 use tracing_subscriber::fmt::MakeWriter;
 
 mod pretty;
+mod simple;
+
+pub(crate) mod shared;
+
 pub use pretty::Pretty;
+pub use simple::Simple;
 
 /// Format a [`Tree`] into a `String`.
 ///
@@ -202,5 +207,26 @@ where
 
         print!("{string}");
         Ok(())
+    }
+}
+
+/// A [`Processor`] that provides a simple structured output to stdout.
+pub type SimplePrinter = Printer<Simple, MakeStdout>;
+
+impl SimplePrinter {
+    /// Returns a new [`SimplePrinter`] that prints to stdout.
+    ///
+    /// Use [`Printer::formatter`] and [`Printer::writer`] for custom configuration.
+    pub const fn new() -> Self {
+        Printer {
+            formatter: Simple,
+            make_writer: MakeStdout,
+        }
+    }
+}
+
+impl Default for SimplePrinter {
+    fn default() -> Self {
+        SimplePrinter::new()
     }
 }

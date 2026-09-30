@@ -72,13 +72,13 @@ pub trait Processor: 'static + Sized {
     /// Returns a `Processor` that first attempts processing with `self`, and
     /// resorts to pretty-printing to stdout on failure.
     fn or_stdout(self) -> WithFallback<Self, Printer<Pretty, MakeStdout>> {
-        self.or(Printer::new().writer(MakeStdout))
+        self.or(Printer::default().writer(MakeStdout))
     }
 
     /// Returns a `Processor` that first attempts processing with `self`, and
     /// resorts to pretty-printing to stderr on failure.
     fn or_stderr(self) -> WithFallback<Self, Printer<Pretty, MakeStderr>> {
-        self.or(Printer::new().writer(MakeStderr))
+        self.or(Printer::default().writer(MakeStderr))
     }
 
     /// Returns a `Processor` that first attempts processing with `self`, otherwise
