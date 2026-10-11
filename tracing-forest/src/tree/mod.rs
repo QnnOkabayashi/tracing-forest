@@ -17,7 +17,7 @@ use uuid::Uuid;
 
 mod field;
 #[cfg(feature = "serde")]
-mod ser;
+pub(crate) mod ser;
 
 pub use field::Field;
 pub(crate) use field::FieldSet;
@@ -88,6 +88,7 @@ pub struct Span {
     /// This span is only displayed *if* there are child nodes in the tree. Else it
     /// will NOT be rendered.
     #[cfg(feature = "defer")]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub(crate) defer_unless_children_attached: bool,
 }
 

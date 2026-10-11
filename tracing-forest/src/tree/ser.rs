@@ -10,7 +10,7 @@ pub(super) fn level<S: Serializer>(level: &Level, serializer: S) -> Result<S::Ok
     serializer.serialize_str(level.as_str())
 }
 
-pub(super) fn nanos<S: Serializer>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error> {
+pub(crate) fn nanos<S: Serializer>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error> {
     serializer.serialize_u128(duration.as_nanos())
 }
 

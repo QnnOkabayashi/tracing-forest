@@ -1,4 +1,4 @@
-use crate::printer::Formatter;
+use crate::printer::{shared::DurationDisplay, Formatter};
 use crate::tree::{Event, Shared, Span, Tree};
 use crate::Tag;
 use std::fmt::{self, Write};
@@ -67,7 +67,7 @@ impl Formatter for Pretty {
     fn fmt(&self, tree: &Tree) -> Result<String, fmt::Error> {
         let mut writer = String::with_capacity(256);
 
-        Pretty::format_tree(tree, None, &mut IndentVec::new(), &mut writer)?;
+        Self::format_tree(tree, None, &mut IndentVec::with_capacity(8), &mut writer)?;
 
         Ok(writer)
     }
@@ -82,9 +82,9 @@ impl Pretty {
     ) -> fmt::Result {
         match tree {
             Tree::Event(event) => {
-                Pretty::format_shared(&event.shared, writer)?;
-                Pretty::format_indent(indent, writer)?;
-                Pretty::format_event(event, writer)
+                Self::format_shared(&event.shared, writer)?;
+                Self::format_indent(indent, writer)?;
+                Self::format_event(event, writer)
             }
             Tree::Span(span) => {
                 // This needs to be called before all other actions are taken. If we don't
@@ -94,9 +94,9 @@ impl Pretty {
                     return Ok(());
                 }
 
-                Pretty::format_shared(&span.shared, writer)?;
-                Pretty::format_indent(indent, writer)?;
-                Pretty::format_span(span, duration_root, indent, writer)
+                Self::format_shared(&span.shared, writer)?;
+                Self::format_indent(indent, writer)?;
+                Self::format_span(span, duration_root, indent, writer)
             }
         }
     }
@@ -196,13 +196,13 @@ impl Pretty {
                 if let Some(edge) = indent.last_mut() {
                     *edge = Indent::Fork;
                 }
-                Pretty::format_tree(tree, Some(root_duration), indent, writer)?;
+                Self::format_tree(tree, Some(root_duration), indent, writer)?;
             }
 
             if let Some(edge) = indent.last_mut() {
                 *edge = Indent::Turn;
             }
-            Pretty::format_tree(last, Some(root_duration), indent, writer)?;
+            Self::format_tree(last, Some(root_duration), indent, writer)?;
 
             indent.pop();
         }
@@ -226,26 +226,6 @@ impl Indent {
             Self::Fork => "┝━ ",
             Self::Turn => "┕━ ",
         }
-    }
-}
-
-struct DurationDisplay(f64);
-
-// Taken from chrono
-impl fmt::Display for DurationDisplay {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut t = self.0;
-        for unit in ["ns", "µs", "ms", "s"] {
-            if t < 10.0 {
-                return write!(f, "{t:.2}{unit}");
-            } else if t < 100.0 {
-                return write!(f, "{t:.1}{unit}");
-            } else if t < 1000.0 {
-                return write!(f, "{t:.0}{unit}");
-            }
-            t /= 1000.0;
-        }
-        write!(f, "{:.0}s", t * 1000.0)
     }
 }
 
